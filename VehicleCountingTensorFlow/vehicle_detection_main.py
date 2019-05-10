@@ -104,7 +104,10 @@ def object_detection_function():
     direction = 'waiting...'
     size = 'waiting...'
     color = 'waiting...'
+    # https://www.tensorflow.org/guide/graphs
+    # https://www.tensorflow.org/api_docs/python/tf/Graph
     with detection_graph.as_default():
+        # https://www.tensorflow.org/api_docs/python/tf/Session
         with tf.Session(graph=detection_graph) as sess:
 
             # Definite input and output Tensors for detection_graph
@@ -141,6 +144,15 @@ def object_detection_function():
                              detection_classes, num_detections],
                              feed_dict={image_tensor: image_np_expanded})
 
+                #edit 2019-05-10 - adding count of boxes per frame output
+                # edit: https://stackoverflow.com/questions/45543154/how-to-count-objects-in-tensorflow-object-detection-api
+                final_score = np.squeeze(scores)    
+                count = 0
+                for i in range(100):
+                    if scores is None or final_score[i] > 0.5:
+                        count = count + 1
+                print(count)
+
                 # Visualization of the results of a detection.
                 (counter, csv_line) = \
                     vis_util.visualize_boxes_and_labels_on_image_array(
@@ -172,10 +184,11 @@ def object_detection_function():
                 # when the vehicle passed over line and counted, make the color of ROI line green
                 if counter == 1:
                     #cv2.line(input_frame, (0, 200), (640, 200), (0, 0xFF, 0), 5)
-                    cv2.line(input_frame, (0, 425), (640, 425), (0, 0xFF, 0), 5)
+                    #                  X(from left),   Y(from top) to  X,   Y (pixels)
+                    cv2.line(input_frame, (200, 150), (640, 50), (0, 0xFF, 0), 5)
                 else:
                     #cv2.line(input_frame, (0, 200), (640, 200), (0, 0, 0xFF), 5)
-                    cv2.line(input_frame, (0, 425), (640, 425), (0, 0, 0xFF), 5)
+                    cv2.line(input_frame, (200, 150), (640, 50), (0, 0, 0xFF), 5)
 
                 # insert information text to video frame
                 cv2.rectangle(input_frame, (10, 275), (230, 337), (180, 132, 109), -1)
