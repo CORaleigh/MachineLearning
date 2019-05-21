@@ -96,7 +96,6 @@ def load_image_into_numpy_array(image):
     return np.array(image.getdata()).reshape((im_height, im_width,
             3)).astype(np.uint8)
 
-
 # Detection
 def object_detection_function():
     total_passed_vehicle = 0
@@ -104,6 +103,9 @@ def object_detection_function():
     direction = 'waiting...'
     size = 'waiting...'
     color = 'waiting...'
+    #edit 2019-05-21
+    # count variable for counting all detections per frame...need to modify to just be new detections and/or increase accuracy of model
+    count = 0
     # https://www.tensorflow.org/guide/graphs
     # https://www.tensorflow.org/api_docs/python/tf/Graph
     with detection_graph.as_default():
@@ -147,7 +149,7 @@ def object_detection_function():
                 #edit 2019-05-10 - adding count of boxes per frame output
                 # edit: https://stackoverflow.com/questions/45543154/how-to-count-objects-in-tensorflow-object-detection-api
                 final_score = np.squeeze(scores)    
-                count = 0
+                #count = 0
                 for i in range(100):
                     if scores is None or final_score[i] > 0.5:
                         count = count + 1
