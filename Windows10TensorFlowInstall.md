@@ -1,4 +1,3 @@
-Windows10-Tensorflow-Anaconda
 How to setup your Windows 10 environment for TensorFlow
 
 This guide by Mark Labinski is very good: https://medium.com/@marklabinski/installing-tensorflow-object-detection-api-on-windows-10-7a4eb83e1e7b
