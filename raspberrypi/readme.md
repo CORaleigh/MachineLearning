@@ -4,5 +4,7 @@ https://towardsdatascience.com/portable-computer-vision-tensorflow-2-0-on-a-rasp
 
 todo:
 schedule photos with the pi every 30 seconds
+
 have tensorflow lite object detection analyze those photos immediately
+
 if trash is detected, create a service request in Cityworks
