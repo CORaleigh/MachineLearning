@@ -109,5 +109,4 @@ data/images
 data/labels
 weights
 detection
-cfg_yolo
 samples
