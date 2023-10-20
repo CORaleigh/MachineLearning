@@ -36,6 +36,7 @@ def consumeDir():
         # Process the received JSON data
         #print('Received:')
         #print(json.dumps(data, indent=4))
+        global final_op
         final_op.append(data)
         #print(final_op)
             # You can add your own logic here to process the received JSON data
@@ -51,7 +52,9 @@ def timer_function():
         #send final_op #create message calls or API brokers here, or save to file
         # Send the data to the Kafka topic
         # Data to be sent to the Kafka topic
+    global final_op
     data = final_op
+    print(len(final_op))
     #print(data)
         # Convert data to bytes (Kafka messages must be bytes)
     message_value = str(data).encode('utf-8')
@@ -71,3 +74,6 @@ def scheduler1():
 
 p1 = multiprocessing.Process(target=consumeDir)
 p2 = multiprocessing.Process(target=scheduler1)
+
+p1.start()
+p2.start()
