@@ -7,6 +7,10 @@ import datetime
 global final_op
 final_op =[]
 
+# open json config file for camera metadata
+with open('cortraffic.json') as f:
+    config_file = json.load(f)
+
 # Set up Kafka consumer
 # Kafka broker address
 bootstrap_servers = 'localhost:9092'
@@ -28,12 +32,14 @@ directions = ["NN", "NS", "NE", "NW", "SS", "SN", "SE", "SW", "EE", "EN", "ES", 
 #        "3029":{"NN":0, "NS":0, "NE":0, "NW":0, "SS":0, "SN":0, "SE":0, "SW":0, "EE":0, "EN":0, "ES":0, "EW":0, "WW":0, "WN":0, "WS":0, "WE":0}
 #    }
 
+
 # set range to number of 15 minute segments the script should run for. i.e. 40 = 10 hours
 # or set for two hour segments and call the script on schedule via cron
 # script can be called outside docker container
 for x in range(1,8):
     #emptying result camera dictionary for the next iteration
     camera_dictionary = {}
+    road_dictionary = {}
     final_op=[]
     now = datetime.now()
     # set future to seconds=15*60 for 15 minutes
@@ -63,6 +69,9 @@ for x in range(1,8):
                         #print(cam, "direction", direc, str(data['start_direction']+data['end_direction']))
                         # if directions match. str() to handle null values.
                         if str(data['start_direction']) + str(data['end_direction']) == direc:
+                            # add start/end road to road dictionary with key as 3029-NS:{start_road_name:, end_road_name:}
+                            if str(cam)+"-"+(direc) not in road_dictionary:
+                                road_dictionary[str(cam)+"-"+(direc)] = {"start_road_name":data['start_road_name'], "end_road_name":data['end_road_name']}
                             # access dictionary and increment direction value
                             #print(camera_dictionary[cam])
                             #print(camera_dictionary[cam][direc])
@@ -83,12 +92,15 @@ for x in range(1,8):
         for direc2, direc2_value in value.items():
             #greater_than_zero = {key: value for key, value in my_dict.items() if int(value) > 0}
             if direc2_value > 0:
+                # add road names
+                for key_cam_direc, value_srname_ername in road_dictionary.items():
+                    if str(key)+"-"+str(direc2) == key_cam_direc:
                 #val_to_append = key, direc2, direc2_value, datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                val_to_append = {"camera":key, "direction":direc2, "count":direc2_value, "time":datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+                        val_to_append = {"id":key, "rddir":direc2, "start_direction":str(direc2)[0], "end_direction":str(direc2)[1], "count":direc2_value, "start_road_name":value_srname_ername["start_road_name"], "end_road_name":value_srname_ername["end_road_name"], "time":datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
                 #json_list.append(val_to_append)
-                print(json.dumps(val_to_append))
-                message_value = str(json.dumps(val_to_append)).encode('utf-8')
-                producer.send(topic, value=message_value)
+                        print(json.dumps(val_to_append))
+                        message_value = str(json.dumps(val_to_append)).encode('utf-8')
+                        producer.send(topic, value=message_value)
     #print(json_list)
     print("number of messages:", len(final_op))
     #encode for kafka
