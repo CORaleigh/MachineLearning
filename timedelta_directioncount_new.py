@@ -162,6 +162,7 @@ import time
 
 ####camera stuff
 cameras = set()
+#polygon_dictionary = set()
 directions = ["NN", "NS", "NE", "NW", "SS", "SN", "SE", "SW", "EE", "EN", "ES", "EW", "WW", "WN", "WS", "WE"]
 
 
@@ -179,6 +180,7 @@ for x in range(1,10800):
     print("x=",x," ",now, future)
     consumer = KafkaConsumer('direction', bootstrap_servers='localhost:9092')
     for message in consumer:
+        # if time is still within the 15 minute segment
         if datetime.now() < future:
             # Decode message value from bytes to string
             message_value = message.value.decode('utf-8')
@@ -187,6 +189,7 @@ for x in range(1,10800):
             # Process the received JSON data
             # 2025-02-10 new cameras using set
             camSensorId = data['sensor_id']
+            classType = data['class']
             cameras.add(camSensorId)
             for cam in cameras:
                 if cam not in camera_dictionary:
@@ -196,19 +199,79 @@ for x in range(1,10800):
                 # if the cameras match
                 # use data['name'] to access values from the json stream
                 if camSensorId == cam:
+                    if classType == "Person":
+                        #print("person found")
+                        # if the class is person, add to polygon dictionary
+                        if cam not in polygon_dictionary:
+                            polygon_dictionary[cam] = {"n-crosswalk":{"count":0, "wait-time":0,"cross-time":0},
+                                                        "s-crosswalk":{"count":0, "wait-time":0,"cross-time":0},
+                                                        "e-crosswalk":{"count":0, "wait-time":0,"cross-time":0},
+                                                        "w-crosswalk":{"count":0, "wait-time":0,"cross-time":0},
+                                                        "w-sidewalk-n":{"count":0, "wait-time":0,"cross-time":0},
+                                                        "w-sidewalk-s":{"count":0, "wait-time":0,"cross-time":0}, 
+                                                        "s-sidewalk-w":{"count":0, "wait-time":0,"cross-time":0}, 
+                                                        "s-sidewalk-e":{"count":0, "wait-time":0,"cross-time":0}, 
+                                                        "e-sidewalk-s":{"count":0, "wait-time":0,"cross-time":0}, 
+                                                        "e-sidewalk-n":{"count":0, "wait-time":0,"cross-time":0}, 
+                                                        "n-sidewalk-e":{"count":0, "wait-time":0,"cross-time":0}, 
+                                                        "n-sidewalk-w":{"count":0, "wait-time":0,"cross-time":0}, 
+                                                        "w-bikelane-wb":{"count":0, "wait-time":0,"cross-time":0}, 
+                                                        "w-bikelane-eb":{"count":0, "wait-time":0,"cross-time":0}, 
+                                                        "s-bikelane-sb":{"count":0, "wait-time":0,"cross-time":0}, 
+                                                        "s-bikelane-nb":{"count":0, "wait-time":0,"cross-time":0}, 
+                                                        "e-bikelane-eb":{"count":0, "wait-time":0,"cross-time":0}, 
+                                                        "e-bikelane-wb":{"count":0, "wait-time":0,"cross-time":0}, 
+                                                        "n-bikelane-nb":{"count":0, "wait-time":0,"cross-time":0}, 
+                                                        "n-bikelane-sb":{"count":0, "wait-time":0,"cross-time":0}, 
+                                                        "n-lane-1":{"count":0, "wait-time":0,"cross-time":0}, 
+                                                        "n-lane-2":{"count":0, "wait-time":0,"cross-time":0}, 
+                                                        "n-lane-3":{"count":0, "wait-time":0,"cross-time":0}, 
+                                                        "n-lane-4":{"count":0, "wait-time":0,"cross-time":0}, 
+                                                        "s-lane-1":{"count":0, "wait-time":0,"cross-time":0}, 
+                                                        "s-lane-2":{"count":0, "wait-time":0,"cross-time":0}, 
+                                                        "s-lane-3":{"count":0, "wait-time":0,"cross-time":0}, 
+                                                        "s-lane-4":{"count":0, "wait-time":0,"cross-time":0}, 
+                                                        "e-lane-1":{"count":0, "wait-time":0,"cross-time":0}, 
+                                                        "e-lane-2":{"count":0, "wait-time":0,"cross-time":0}, 
+                                                        "e-lane-3":{"count":0, "wait-time":0,"cross-time":0}, 
+                                                        "e-lane-4":{"count":0, "wait-time":0,"cross-time":0}, 
+                                                        "w-lane-1":{"count":0, "wait-time":0,"cross-time":0}, 
+                                                        "w-lane-2":{"count":0, "wait-time":0,"cross-time":0}, 
+                                                        "w-lane-3":{"count":0, "wait-time":0,"cross-time":0}, 
+                                                        "w-lane-4":{"count":0, "wait-time":0,"cross-time":0}}
+                        # check for polygons
+                        for poly in data['polygons']:
+                            if poly in polygon_dictionary[cam]:
+                                # increment count for polygon
+                                polygon_dictionary[cam][poly]["count"] += 1
+                                # check if waiting time is in data
+                                if 'waiting_time' in data and poly in data['waiting_time']:
+                                    polygon_dictionary[cam][poly]["wait-time"] += data['waiting_time'][poly]
+                                # check if crossing time is in data
+                                if 'crossing_time' in data and poly in data['crossing_time']:
+                                    polygon_dictionary[cam][poly]["cross-time"] += data['crossing_time'][poly]
+                            # for poly in data['polygons']:
+                            #     if 'crosswalk' in poly:
+                            #         polygon_dictionary[cam]["crosswalk"] += 1
+                            #     elif 'bikelane' in poly:
+                            #         polygon_dictionary[cam]["bikelane"] += 1
+                            #     elif 'sidewalk' in poly:
+                            #         polygon_dictionary[cam]["sidewalk"] += 1
+
+                    elif classType == "car":
                     # check all directions
-                    for direc in directions:
-                        #print(cam, "direction", direc, str(data['start_direction']+data['end_direction']))
-                        # if directions match. str() to handle null values.
-                        if str(data['start_direction']) + str(data['end_direction']) == direc:
-                            #print('match found')
-                            # add start/end road to road dictionary with key as 3029-NS:{start_road_name:, end_road_name:}
-                            if str(cam)+"-"+(direc) not in road_dictionary:
-                                road_dictionary[str(cam)+"-"+(direc)] = {"start_road_name":data['start_road_name'], "end_road_name":data['end_road_name']}
-                            # access dictionary and increment direction value
-                            #print(camera_dictionary[cam])
-                            #print(camera_dictionary[cam][direc])
-                            camera_dictionary[cam][direc] += 1
+                        for direc in directions:
+                            #print(cam, "direction", direc, str(data['start_direction']+data['end_direction']))
+                            # if directions match. str() to handle null values.
+                            if str(data['start_direction']) + str(data['end_direction']) == direc:
+                                #print('match found')
+                                # add start/end road to road dictionary with key as 3029-NS:{start_road_name:, end_road_name:}
+                                if str(cam)+"-"+(direc) not in road_dictionary:
+                                    road_dictionary[str(cam)+"-"+(direc)] = {"start_road_name":data['start_road_name'], "end_road_name":data['end_road_name']}
+                                # access dictionary and increment direction value
+                                #print(camera_dictionary[cam])
+                                #print(camera_dictionary[cam][direc])
+                                camera_dictionary[cam][direc] += 1
 
             final_op.append(data)
             #print(len(final_op))
