@@ -1,5 +1,3 @@
-## Moved Sardeenz old readme.md to the garbageDetector directory as it was meant for that
-
 This repo contains some proof of concept efforts around garbage detection, using a raspberry pi for detection, TensorFlow, and Unsupervised machine learning. It also contains the production script timedelta_directioncount.py (and _new).
 
 

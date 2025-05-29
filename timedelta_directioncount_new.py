@@ -230,6 +230,7 @@ for x in range(1,10800):
                     if classType == "Person":
                         #print("person found")
                         # if the class is person, add to polygon dictionary
+                        # question: should this include bike classes as well or should they have a separate dictionary?
                         if cam not in polygon_dictionary:
                             polygon_dictionary[cam] = {"n-crosswalk":{"count":0, "wait-time":0,"cross-time":0, "violation-count":0},
                                                         "s-crosswalk":{"count":0, "wait-time":0,"cross-time":0, "violation-count":0},
