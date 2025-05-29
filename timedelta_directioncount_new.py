@@ -130,6 +130,34 @@ Received:
     "message_type": "trajectory_data"
 }
 
+{
+      "_id": "6835157ad43e7a7522bec3f1",
+      "sensor_id": "3188",
+      "object_id": 223,
+      "class": "bicycle",
+      "start_timestamp": "2025-05-27 01:29:38",
+      "end_timestamp": "2025-05-27 01:29:43",
+      "start_direction": "n",
+      "end_direction": "n",
+      "polygons": [
+        "n-crosswalk",
+        "n-sidewalk-w"
+      ],
+      "movement": "U",
+      "violation": true,
+      "violation_details": {
+        "pedestrian_lane": [
+          "n-sidewalk-w"
+        ]
+      },
+      "waiting_time": "",
+      "crossing_time": "",
+      "near_miss_detection": false,
+      "time": "27/05/2025 01:29:30",
+      "message_type": "trajectory_data",
+      "ingested_at": 1748309370.3665698
+    }
+
   """
 
 from kafka import KafkaConsumer
@@ -203,42 +231,42 @@ for x in range(1,10800):
                         #print("person found")
                         # if the class is person, add to polygon dictionary
                         if cam not in polygon_dictionary:
-                            polygon_dictionary[cam] = {"n-crosswalk":{"count":0, "wait-time":0,"cross-time":0},
-                                                        "s-crosswalk":{"count":0, "wait-time":0,"cross-time":0},
-                                                        "e-crosswalk":{"count":0, "wait-time":0,"cross-time":0},
-                                                        "w-crosswalk":{"count":0, "wait-time":0,"cross-time":0},
-                                                        "w-sidewalk-n":{"count":0, "wait-time":0,"cross-time":0},
-                                                        "w-sidewalk-s":{"count":0, "wait-time":0,"cross-time":0}, 
-                                                        "s-sidewalk-w":{"count":0, "wait-time":0,"cross-time":0}, 
-                                                        "s-sidewalk-e":{"count":0, "wait-time":0,"cross-time":0}, 
-                                                        "e-sidewalk-s":{"count":0, "wait-time":0,"cross-time":0}, 
-                                                        "e-sidewalk-n":{"count":0, "wait-time":0,"cross-time":0}, 
-                                                        "n-sidewalk-e":{"count":0, "wait-time":0,"cross-time":0}, 
-                                                        "n-sidewalk-w":{"count":0, "wait-time":0,"cross-time":0}, 
-                                                        "w-bikelane-wb":{"count":0, "wait-time":0,"cross-time":0}, 
-                                                        "w-bikelane-eb":{"count":0, "wait-time":0,"cross-time":0}, 
-                                                        "s-bikelane-sb":{"count":0, "wait-time":0,"cross-time":0}, 
-                                                        "s-bikelane-nb":{"count":0, "wait-time":0,"cross-time":0}, 
-                                                        "e-bikelane-eb":{"count":0, "wait-time":0,"cross-time":0}, 
-                                                        "e-bikelane-wb":{"count":0, "wait-time":0,"cross-time":0}, 
-                                                        "n-bikelane-nb":{"count":0, "wait-time":0,"cross-time":0}, 
-                                                        "n-bikelane-sb":{"count":0, "wait-time":0,"cross-time":0}, 
-                                                        "n-lane-1":{"count":0, "wait-time":0,"cross-time":0}, 
-                                                        "n-lane-2":{"count":0, "wait-time":0,"cross-time":0}, 
-                                                        "n-lane-3":{"count":0, "wait-time":0,"cross-time":0}, 
-                                                        "n-lane-4":{"count":0, "wait-time":0,"cross-time":0}, 
-                                                        "s-lane-1":{"count":0, "wait-time":0,"cross-time":0}, 
-                                                        "s-lane-2":{"count":0, "wait-time":0,"cross-time":0}, 
-                                                        "s-lane-3":{"count":0, "wait-time":0,"cross-time":0}, 
-                                                        "s-lane-4":{"count":0, "wait-time":0,"cross-time":0}, 
-                                                        "e-lane-1":{"count":0, "wait-time":0,"cross-time":0}, 
-                                                        "e-lane-2":{"count":0, "wait-time":0,"cross-time":0}, 
-                                                        "e-lane-3":{"count":0, "wait-time":0,"cross-time":0}, 
-                                                        "e-lane-4":{"count":0, "wait-time":0,"cross-time":0}, 
-                                                        "w-lane-1":{"count":0, "wait-time":0,"cross-time":0}, 
-                                                        "w-lane-2":{"count":0, "wait-time":0,"cross-time":0}, 
-                                                        "w-lane-3":{"count":0, "wait-time":0,"cross-time":0}, 
-                                                        "w-lane-4":{"count":0, "wait-time":0,"cross-time":0}}
+                            polygon_dictionary[cam] = {"n-crosswalk":{"count":0, "wait-time":0,"cross-time":0, "violation-count":0},
+                                                        "s-crosswalk":{"count":0, "wait-time":0,"cross-time":0, "violation-count":0},
+                                                        "e-crosswalk":{"count":0, "wait-time":0,"cross-time":0, "violation-count":0},
+                                                        "w-crosswalk":{"count":0, "wait-time":0,"cross-time":0, "violation-count":0},
+                                                        "w-sidewalk-n":{"count":0, "wait-time":0,"cross-time":0, "violation-count":0},
+                                                        "w-sidewalk-s":{"count":0, "wait-time":0,"cross-time":0, "violation-count":0}, 
+                                                        "s-sidewalk-w":{"count":0, "wait-time":0,"cross-time":0, "violation-count":0}, 
+                                                        "s-sidewalk-e":{"count":0, "wait-time":0,"cross-time":0, "violation-count":0}, 
+                                                        "e-sidewalk-s":{"count":0, "wait-time":0,"cross-time":0, "violation-count":0}, 
+                                                        "e-sidewalk-n":{"count":0, "wait-time":0,"cross-time":0, "violation-count":0}, 
+                                                        "n-sidewalk-e":{"count":0, "wait-time":0,"cross-time":0, "violation-count":0}, 
+                                                        "n-sidewalk-w":{"count":0, "wait-time":0,"cross-time":0, "violation-count":0}, 
+                                                        "w-bikelane-wb":{"count":0, "wait-time":0,"cross-time":0, "violation-count":0}, 
+                                                        "w-bikelane-eb":{"count":0, "wait-time":0,"cross-time":0, "violation-count":0}, 
+                                                        "s-bikelane-sb":{"count":0, "wait-time":0,"cross-time":0, "violation-count":0}, 
+                                                        "s-bikelane-nb":{"count":0, "wait-time":0,"cross-time":0, "violation-count":0}, 
+                                                        "e-bikelane-eb":{"count":0, "wait-time":0,"cross-time":0, "violation-count":0}, 
+                                                        "e-bikelane-wb":{"count":0, "wait-time":0,"cross-time":0, "violation-count":0}, 
+                                                        "n-bikelane-nb":{"count":0, "wait-time":0,"cross-time":0, "violation-count":0}, 
+                                                        "n-bikelane-sb":{"count":0, "wait-time":0,"cross-time":0, "violation-count":0}, 
+                                                        "n-lane-1":{"count":0, "wait-time":0,"cross-time":0, "violation-count":0}, 
+                                                        "n-lane-2":{"count":0, "wait-time":0,"cross-time":0, "violation-count":0}, 
+                                                        "n-lane-3":{"count":0, "wait-time":0,"cross-time":0, "violation-count":0}, 
+                                                        "n-lane-4":{"count":0, "wait-time":0,"cross-time":0, "violation-count":0}, 
+                                                        "s-lane-1":{"count":0, "wait-time":0,"cross-time":0, "violation-count":0}, 
+                                                        "s-lane-2":{"count":0, "wait-time":0,"cross-time":0, "violation-count":0}, 
+                                                        "s-lane-3":{"count":0, "wait-time":0,"cross-time":0, "violation-count":0}, 
+                                                        "s-lane-4":{"count":0, "wait-time":0,"cross-time":0, "violation-count":0}, 
+                                                        "e-lane-1":{"count":0, "wait-time":0,"cross-time":0, "violation-count":0}, 
+                                                        "e-lane-2":{"count":0, "wait-time":0,"cross-time":0, "violation-count":0}, 
+                                                        "e-lane-3":{"count":0, "wait-time":0,"cross-time":0, "violation-count":0}, 
+                                                        "e-lane-4":{"count":0, "wait-time":0,"cross-time":0, "violation-count":0}, 
+                                                        "w-lane-1":{"count":0, "wait-time":0,"cross-time":0, "violation-count":0}, 
+                                                        "w-lane-2":{"count":0, "wait-time":0,"cross-time":0, "violation-count":0}, 
+                                                        "w-lane-3":{"count":0, "wait-time":0,"cross-time":0, "violation-count":0}, 
+                                                        "w-lane-4":{"count":0, "wait-time":0,"cross-time":0, "violation-count":0}}
                         # check for polygons
                         for poly in data['polygons']:
                             if poly in polygon_dictionary[cam]:
@@ -250,15 +278,13 @@ for x in range(1,10800):
                                 # check if crossing time is in data
                                 if 'crossing_time' in data and poly in data['crossing_time']:
                                     polygon_dictionary[cam][poly]["cross-time"] += data['crossing_time'][poly]
-                            # for poly in data['polygons']:
-                            #     if 'crosswalk' in poly:
-                            #         polygon_dictionary[cam]["crosswalk"] += 1
-                            #     elif 'bikelane' in poly:
-                            #         polygon_dictionary[cam]["bikelane"] += 1
-                            #     elif 'sidewalk' in poly:
-                            #         polygon_dictionary[cam]["sidewalk"] += 1
+                                # check violation and increment count
+                                if data['violation'] == True and poly in data['violation_details']['pedestrian_lane']:
+                                    polygon_dictionary[cam][poly]["violation-count"] += 1
+                                    #print("violation detected for camera", cam, "object id", data['object_id'], "class", classType, "polygons", data['polygons'])
+                                    print(data['violation_details']['pedestrian_lane'])
 
-                    elif classType == "car":
+                    elif classType == "car" or classType == "bus" or classType == "truck":
                     # check all directions
                         for direc in directions:
                             #print(cam, "direction", direc, str(data['start_direction']+data['end_direction']))
