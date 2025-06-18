@@ -193,8 +193,8 @@ Received:
 
   """
 
-from kafka import KafkaConsumer
-from kafka import KafkaProducer
+#from kafka import KafkaConsumer
+#from kafka import KafkaProducer
 import json
 import time
 import datetime
@@ -205,7 +205,8 @@ final_op =[]
 # open sample data for testing
 with open('response_1748355187885.json') as f:
     config_file = json.load(f)
-    for x in config_file:
+    consumer = config_file
+    for x in consumer['entries']:
         print(x)
         
 # Set up Kafka consumer
@@ -214,10 +215,10 @@ bootstrap_servers = 'localhost:9092'
 # Kafka topic to which you want to send the data
 topic = 'directioncount'
 # Create a Kafka producer instance
-producer = KafkaProducer(bootstrap_servers=bootstrap_servers)
+#producer = KafkaProducer(bootstrap_servers=bootstrap_servers)
 
 #consumer2= KafkaConsumer('directioncount', bootstrap_servers='localhost:9092')
-consumer = KafkaConsumer('direction', bootstrap_servers='localhost:9092')
+#consumer = KafkaConsumer('direction', bootstrap_servers='localhost:9092')
 
 from datetime import datetime, timedelta
 import time
@@ -240,14 +241,14 @@ for x in range(1,10800):
     # set future to seconds=15*60 for 15 minutes
     future = now + timedelta(seconds=15*60)
     print("x=",x," ",now, future)
-    consumer = KafkaConsumer('direction', bootstrap_servers='localhost:9092')
+    #consumer = KafkaConsumer('direction', bootstrap_servers='localhost:9092')
     for message in consumer:
         # if time is still within the 15 minute segment
         if datetime.now() < future:
             # Decode message value from bytes to string
-            message_value = message.value.decode('utf-8')
+            #message_value = message.value.decode('utf-8')
             # Parse JSON data
-            data = json.loads(message_value)
+            data = json.loads(message)
             # Process the received JSON data
             # 2025-02-10 new cameras using set
             camSensorId = data['sensor_id']
@@ -368,7 +369,7 @@ for x in range(1,10800):
                         print(json.dumps(val_to_append))
                         message_value = str(json.dumps(val_to_append)).encode('utf-8')
                         # don't send yet, wait for data from 
-                        producer.send(topic, value=message_value)
+                        #producer.send(topic, value=message_value)
                             #print(json_list)
     print("number of messages:", len(final_op))
 
@@ -380,7 +381,7 @@ for x in range(1,10800):
                 val_to_append = {"id":key, "polygon":poly, "ped_count":poly_value["ped-count"], "bike_count":poly_value["bike-count"], "ped_wait_time":poly_value["ped-wait-time"], "ped_cross_time":poly_value["ped-cross-time"], "ped_violation_count":poly_value["ped-violation-count"], "bike_violation_count":poly_value["bike-violation-count"], "ped_wait_time_max":poly_value["ped-wait-time-max"], "ped_cross_time_max":poly_value["ped-cross-time-max"], "time":datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
                 print(json.dumps(val_to_append))
                 message_value = str(json.dumps(val_to_append)).encode('utf-8')
-                producer.send(topic, value=message_value)
+                #producer.send(topic, value=message_value)
 
 
 
@@ -392,6 +393,6 @@ for x in range(1,10800):
 
 # probably not necessary to close consumer here but just in case
 consumer.close()
-producer.close()
+#producer.close()
 
 print("end script")
