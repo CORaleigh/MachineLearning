@@ -206,8 +206,8 @@ final_op =[]
 with open('response_1748355187885.json') as f:
     config_file = json.load(f)
     consumer = config_file
-    for x in consumer['entries']:
-        print(x)
+    #for x in consumer['entries']:
+        #print(x)
         
 # Set up Kafka consumer
 # Kafka broker address
@@ -226,12 +226,12 @@ import time
 ####camera stuff
 cameras = set()
 #polygon_dictionary = set()
-directions = ["NN", "NS", "NE", "NW", "SS", "SN", "SE", "SW", "EE", "EN", "ES", "EW", "WW", "WN", "WS", "WE"]
-
+#directions = ["NN", "NS", "NE", "NW", "SS", "SN", "SE", "SW", "EE", "EN", "ES", "EW", "WW", "WN", "WS", "WE"]
+directions = ["nn", "ns", "ne", "nw", "ss", "sn", "se", "sw", "ee", "en", "es", "ew", "ww", "wn", "ws", "we"]
 
 # set range to number of 15 minute segments the script should run for. i.e. 40 = 10 hours
 # script can be called outside docker container
-for x in range(1,10800):
+for x in range(1,2):
     #emptying result camera dictionary for the next iteration
     camera_dictionary = {}
     road_dictionary = {}
@@ -239,16 +239,19 @@ for x in range(1,10800):
     final_op=[]
     now = datetime.now()
     # set future to seconds=15*60 for 15 minutes
-    future = now + timedelta(seconds=15*60)
+    future = now + timedelta(seconds=1*30)
     print("x=",x," ",now, future)
     #consumer = KafkaConsumer('direction', bootstrap_servers='localhost:9092')
-    for message in consumer:
+    #for message in consumer:
+    for message in consumer['entries']:
         # if time is still within the 15 minute segment
         if datetime.now() < future:
             # Decode message value from bytes to string
             #message_value = message.value.decode('utf-8')
             # Parse JSON data
-            data = json.loads(message)
+            #data = json.loads(message)
+            data = message
+            #print(data)
             # Process the received JSON data
             # 2025-02-10 new cameras using set
             camSensorId = data['sensor_id']
@@ -305,14 +308,17 @@ for x in range(1,10800):
                         # check for polygons
                         for poly in data['polygons']:
                             if poly in polygon_dictionary[cam]:
-                                # increment count for polygon
-                                polygon_dictionary[cam][poly]["count"] += 1
+                                # increment count for polygon ped
+                                if classType=="bicycle":
+                                    polygon_dictionary[cam][poly]["bike-count"] += 1
+                                elif classType=="Person":
+                                    polygon_dictionary[cam][poly]["ped-count"] += 1
                                 # check if waiting time is in data
                                 if 'waiting_time' in data and poly in data['waiting_time']:
-                                    polygon_dictionary[cam][poly]["wait-time"] += data['waiting_time'][poly]
+                                    polygon_dictionary[cam][poly]["ped-wait-time"] += data['waiting_time'][poly]
                                 # check if crossing time is in data
                                 if 'crossing_time' in data and poly in data['crossing_time']:
-                                    polygon_dictionary[cam][poly]["cross-time"] += data['crossing_time'][poly]
+                                    polygon_dictionary[cam][poly]["ped-cross-time"] += data['crossing_time'][poly]
                                 # check violation and increment count for bike and pedestrian lane violations
                                 if classType=="bicycle" and data['violation'] == True and poly in data['violation_details']['pedestrian_lane']:
                                     polygon_dictionary[cam][poly]["bike-violation-count"] += 1
@@ -330,6 +336,7 @@ for x in range(1,10800):
                                         polygon_dictionary[cam][poly]["ped-cross-time-max"] = data['crossing_time'][poly]
 
                     elif classType == "car" or classType == "bus" or classType == "truck":
+                        #print("vehicle found")
                     # check all directions
                         for direc in directions:
                             #print(cam, "direction", direc, str(data['start_direction']+data['end_direction']))
@@ -338,7 +345,8 @@ for x in range(1,10800):
                                 #print('match found')
                                 # add start/end road to road dictionary with key as 3029-NS:{start_road_name:, end_road_name:}
                                 if str(cam)+"-"+(direc) not in road_dictionary:
-                                    road_dictionary[str(cam)+"-"+(direc)] = {"start_road_name":data['start_road_name'], "end_road_name":data['end_road_name']}
+                                    #road_dictionary[str(cam)+"-"+(direc)] = {"start_road_name":data['start_road_name'], "end_road_name":data['end_road_name']}
+                                    road_dictionary[str(cam)+"-"+(direc)] = {"start_road_name":data['start_direction'], "end_road_name":data['end_direction']}
                                 # access dictionary and increment direction value
                                 #print(camera_dictionary[cam])
                                 #print(camera_dictionary[cam][direc])
@@ -392,7 +400,7 @@ for x in range(1,10800):
     ##### end producer logic
 
 # probably not necessary to close consumer here but just in case
-consumer.close()
+#consumer.close()
 #producer.close()
 
 print("end script")
