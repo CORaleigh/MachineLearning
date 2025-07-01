@@ -193,14 +193,21 @@ Received:
 
   """
 
-from kafka import KafkaConsumer
-from kafka import KafkaProducer
+#from kafka import KafkaConsumer
+#from kafka import KafkaProducer
 import json
 import time
 import datetime
 
 global final_op
 final_op =[]
+
+# open sample data for testing
+with open('response_1748355187885.json') as f:
+    config_file = json.load(f)
+    consumer = config_file
+    #for x in consumer['entries']:
+        #print(x)
         
 # Set up Kafka consumer
 # Kafka broker address
@@ -208,10 +215,10 @@ bootstrap_servers = 'localhost:9092'
 # Kafka topic to which you want to send the data
 topic = 'directioncount'
 # Create a Kafka producer instance
-producer = KafkaProducer(bootstrap_servers=bootstrap_servers)
+#producer = KafkaProducer(bootstrap_servers=bootstrap_servers)
 
 #consumer2= KafkaConsumer('directioncount', bootstrap_servers='localhost:9092')
-consumer = KafkaConsumer('direction', bootstrap_servers='localhost:9092')
+#consumer = KafkaConsumer('direction', bootstrap_servers='localhost:9092')
 
 from datetime import datetime, timedelta
 import time
@@ -219,12 +226,13 @@ import time
 ####camera stuff
 cameras = set()
 #polygon_dictionary = set()
-directions = ["NN", "NS", "NE", "NW", "SS", "SN", "SE", "SW", "EE", "EN", "ES", "EW", "WW", "WN", "WS", "WE"]
+#directions = ["NN", "NS", "NE", "NW", "SS", "SN", "SE", "SW", "EE", "EN", "ES", "EW", "WW", "WN", "WS", "WE"]
+directions = ["nn", "ns", "ne", "nw", "ss", "sn", "se", "sw", "ee", "en", "es", "ew", "ww", "wn", "ws", "we"]
 pedBikeCameras = ["3188"]
 
 # set range to number of 15 minute segments the script should run for. i.e. 40 = 10 hours
 # script can be called outside docker container
-for x in range(1,10800):
+for x in range(1,2):
     #emptying result camera dictionary for the next iteration
     camera_dictionary = {}
     road_dictionary = {}
@@ -232,16 +240,19 @@ for x in range(1,10800):
     final_op=[]
     now = datetime.now()
     # set future to seconds=15*60 for 15 minutes
-    future = now + timedelta(seconds=15*60)
+    future = now + timedelta(seconds=1*30)
     print("x=",x," ",now, future)
-    consumer = KafkaConsumer('direction', bootstrap_servers='localhost:9092')
-    for message in consumer:
+    #consumer = KafkaConsumer('direction', bootstrap_servers='localhost:9092')
+    #for message in consumer:
+    for message in consumer['entries']:
         # if time is still within the 15 minute segment
         if datetime.now() < future:
             # Decode message value from bytes to string
-            message_value = message.value.decode('utf-8')
+            #message_value = message.value.decode('utf-8')
             # Parse JSON data
-            data = json.loads(message_value)
+            #data = json.loads(message)
+            data = message
+            #print(data)
             # Process the received JSON data
             # 2025-02-10 new cameras using set
             camSensorId = data['sensor_id']
@@ -298,12 +309,11 @@ for x in range(1,10800):
                         # check for polygons
                         for poly in data['polygons']:
                             if poly in polygon_dictionary[cam]:
-                                # increment count for polygons
+                                # increment count for polygon ped
                                 if classType=="bicycle":
                                     polygon_dictionary[cam][poly]["bike-count"] += 1
                                 elif classType=="Person":
                                     polygon_dictionary[cam][poly]["ped-count"] += 1
-                                #polygon_dictionary[cam][poly]["count"] += 1
                                 # check if waiting time is in data
                                 if 'waiting_time' in data and poly in data['waiting_time']:
                                     polygon_dictionary[cam][poly]["ped-wait-time"] += data['waiting_time'][poly]
@@ -327,6 +337,7 @@ for x in range(1,10800):
                                         polygon_dictionary[cam][poly]["ped-cross-time-max"] = data['crossing_time'][poly]
 
                     elif classType == "car" or classType == "bus" or classType == "truck":
+                        #print("vehicle found")
                     # check all directions
                         for direc in directions:
                             #print(cam, "direction", direc, str(data['start_direction']+data['end_direction']))
@@ -335,7 +346,8 @@ for x in range(1,10800):
                                 #print('match found')
                                 # add start/end road to road dictionary with key as 3029-NS:{start_road_name:, end_road_name:}
                                 if str(cam)+"-"+(direc) not in road_dictionary:
-                                    road_dictionary[str(cam)+"-"+(direc)] = {"start_road_name":data['start_road_name'], "end_road_name":data['end_road_name']}
+                                    #road_dictionary[str(cam)+"-"+(direc)] = {"start_road_name":data['start_road_name'], "end_road_name":data['end_road_name']}
+                                    road_dictionary[str(cam)+"-"+(direc)] = {"start_road_name":data['start_direction'], "end_road_name":data['end_direction']}
                                 # access dictionary and increment direction value
                                 #print(camera_dictionary[cam])
                                 #print(camera_dictionary[cam][direc])
@@ -354,31 +366,70 @@ for x in range(1,10800):
     #json_list = []
     # for each camera
     for key, value in camera_dictionary.items():
-        # for each camera direction
-        for direc2, direc2_value in value.items():
-            if direc2_value > 0:
-                # add road names
-                for key_cam_direc, value_srname_ername in road_dictionary.items():
-                    if str(key)+"-"+str(direc2) == key_cam_direc:
-                #val_to_append = key, direc2, direc2_value, datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        val_to_append = {"id":key, "rddir":direc2, "start_direction":str(direc2)[0], "end_direction":str(direc2)[1], "count":direc2_value, "start_road_name":value_srname_ername["start_road_name"], "end_road_name":value_srname_ername["end_road_name"], "time":datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
-                #json_list.append(val_to_append)
-                        print(json.dumps(val_to_append))
-                        message_value = str(json.dumps(val_to_append)).encode('utf-8')
-                        # don't send yet, wait for data from 
-                        producer.send(topic, value=message_value)
-                            #print(json_list)
+        # if the camera is not a ped/bike only camera
+        if str(key) not in pedBikeCameras:
+            # for each camera direction
+            for direc2, direc2_value in value.items():
+                if direc2_value > 0:
+                    # add road names
+                    for key_cam_direc, value_srname_ername in road_dictionary.items():
+                        if str(key)+"-"+str(direc2) == key_cam_direc:
+                    #val_to_append = key, direc2, direc2_value, datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                            # the vehicle data never has polygon, ped or bike counts
+                            # just fill with blanks so data structure for geoevent consumption is the same
+                            val_to_append = {"id":key,
+                                            "class":"vehicle",
+                                            "polygon":"", 
+                                            "ped_count":"", 
+                                            "bike_count":"", 
+                                            "ped_wait_time":"", 
+                                            "ped_cross_time":"", 
+                                            "ped_violation_count":"", 
+                                            "bike_violation_count":"", 
+                                            "ped_wait_time_max":"", 
+                                            "ped_cross_time_max":"",
+                                            "time":datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                                            "rddir":direc2,
+                                            "start_direction":str(direc2)[0], 
+                                            "end_direction":str(direc2)[1],
+                                            "count":direc2_value,
+                                            "start_road_name":value_srname_ername["start_road_name"], 
+                                            "end_road_name":value_srname_ername["end_road_name"]}
+                    #json_list.append(val_to_append)
+                            print(json.dumps(val_to_append))
+                            message_value = str(json.dumps(val_to_append)).encode('utf-8')
+                            # don't send yet, wait for data from 
+                            #producer.send(topic, value=message_value)
+                                #print(json_list)
     print("number of messages:", len(final_op))
 
 
     for key, value in polygon_dictionary.items():
+        # todo: add if key = camera that is ped/bike only
         for poly, poly_value in value.items():
             if poly_value["ped-count"] > 0 or poly_value["bike-count"] > 0:
                 #print("polygon", poly, "ped-count", poly_value["ped-count"], "bike-count", poly_value["bike-count"])
-                val_to_append = {"id":key, "polygon":poly, "ped_count":poly_value["ped-count"], "bike_count":poly_value["bike-count"], "ped_wait_time":poly_value["ped-wait-time"], "ped_cross_time":poly_value["ped-cross-time"], "ped_violation_count":poly_value["ped-violation-count"], "bike_violation_count":poly_value["bike-violation-count"], "ped_wait_time_max":poly_value["ped-wait-time-max"], "ped_cross_time_max":poly_value["ped-cross-time-max"], "time":datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+                val_to_append = {"id":key, 
+                                "class":"ped-bike", 
+                                "polygon":poly, 
+                                "ped_count":poly_value["ped-count"], 
+                                "bike_count":poly_value["bike-count"], 
+                                "ped_wait_time":poly_value["ped-wait-time"], 
+                                "ped_cross_time":poly_value["ped-cross-time"], 
+                                "ped_violation_count":poly_value["ped-violation-count"], 
+                                "bike_violation_count":poly_value["bike-violation-count"], 
+                                "ped_wait_time_max":poly_value["ped-wait-time-max"], 
+                                "ped_cross_time_max":poly_value["ped-cross-time-max"], 
+                                "time":datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                                "rddir":direc2,
+                                "start_direction":str(direc2)[0], 
+                                "end_direction":str(direc2)[1],
+                                "count":direc2_value,
+                                "start_road_name":value_srname_ername["start_road_name"], 
+                                "end_road_name":value_srname_ername["end_road_name"]}
                 print(json.dumps(val_to_append))
                 message_value = str(json.dumps(val_to_append)).encode('utf-8')
-                producer.send(topic, value=message_value)
+                #producer.send(topic, value=message_value)
 
 
 
@@ -389,7 +440,7 @@ for x in range(1,10800):
     ##### end producer logic
 
 # probably not necessary to close consumer here but just in case
-consumer.close()
-producer.close()
+#consumer.close()
+#producer.close()
 
 print("end script")
