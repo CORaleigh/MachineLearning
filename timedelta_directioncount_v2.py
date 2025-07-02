@@ -220,7 +220,7 @@ import time
 cameras = set()
 #polygon_dictionary = set()
 directions = ["NN", "NS", "NE", "NW", "SS", "SN", "SE", "SW", "EE", "EN", "ES", "EW", "WW", "WN", "WS", "WE"]
-pedBikeCameras = ["3188"]
+bikepedonly = ["3157B", "3157A", "3156", "3156A"]
 
 # set range to number of 15 minute segments the script should run for. i.e. 40 = 10 hours
 # script can be called outside docker container
@@ -355,19 +355,38 @@ for x in range(1,10800):
     # for each camera
     for key, value in camera_dictionary.items():
         # for each camera direction
-        for direc2, direc2_value in value.items():
-            if direc2_value > 0:
-                # add road names
-                for key_cam_direc, value_srname_ername in road_dictionary.items():
-                    if str(key)+"-"+str(direc2) == key_cam_direc:
-                #val_to_append = key, direc2, direc2_value, datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        val_to_append = {"id":key, "rddir":direc2, "start_direction":str(direc2)[0], "end_direction":str(direc2)[1], "count":direc2_value, "start_road_name":value_srname_ername["start_road_name"], "end_road_name":value_srname_ername["end_road_name"], "time":datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
-                #json_list.append(val_to_append)
-                        print(json.dumps(val_to_append))
-                        message_value = str(json.dumps(val_to_append)).encode('utf-8')
-                        # don't send yet, wait for data from 
-                        producer.send(topic, value=message_value)
-                            #print(json_list)
+        if str(key) not in bikepedonly:
+            for direc2, direc2_value in value.items():
+                if direc2_value > 0:
+                    # add road names
+                    for key_cam_direc, value_srname_ername in road_dictionary.items():
+                        if str(key)+"-"+str(direc2) == key_cam_direc:
+                    #val_to_append = key, direc2, direc2_value, datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                            #val_to_append = {"id":key, "rddir":direc2, "start_direction":str(direc2)[0], "end_direction":str(direc2)[1], "count":direc2_value, "start_road_name":value_srname_ername["start_road_name"], "end_road_name":value_srname_ername["end_road_name"], "time":datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+                            val_to_append = {"id":key,
+                                                "class":"vehicle",
+                                                "polygon":"", 
+                                                "ped_count":"", 
+                                                "bike_count":"", 
+                                                "ped_wait_time":"", 
+                                                "ped_cross_time":"", 
+                                                "ped_violation_count":"", 
+                                                "bike_violation_count":"", 
+                                                "ped_wait_time_max":"", 
+                                                "ped_cross_time_max":"",
+                                                "time":datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                                                "rddir":direc2,
+                                                "start_direction":str(direc2)[0], 
+                                                "end_direction":str(direc2)[1],
+                                                "count":direc2_value,
+                                                "start_road_name":value_srname_ername["start_road_name"], 
+                                                "end_road_name":value_srname_ername["end_road_name"]}
+                    #json_list.append(val_to_append)
+                            print(json.dumps(val_to_append))
+                            message_value = str(json.dumps(val_to_append)).encode('utf-8')
+                            # don't send yet, wait for data from 
+                            producer.send(topic, value=message_value)
+                                #print(json_list)
     print("number of messages:", len(final_op))
 
 
@@ -375,7 +394,25 @@ for x in range(1,10800):
         for poly, poly_value in value.items():
             if poly_value["ped-count"] > 0 or poly_value["bike-count"] > 0:
                 #print("polygon", poly, "ped-count", poly_value["ped-count"], "bike-count", poly_value["bike-count"])
-                val_to_append = {"id":key, "polygon":poly, "ped_count":poly_value["ped-count"], "bike_count":poly_value["bike-count"], "ped_wait_time":poly_value["ped-wait-time"], "ped_cross_time":poly_value["ped-cross-time"], "ped_violation_count":poly_value["ped-violation-count"], "bike_violation_count":poly_value["bike-violation-count"], "ped_wait_time_max":poly_value["ped-wait-time-max"], "ped_cross_time_max":poly_value["ped-cross-time-max"], "time":datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+                #val_to_append = {"id":key, "polygon":poly, "ped_count":poly_value["ped-count"], "bike_count":poly_value["bike-count"], "ped_wait_time":poly_value["ped-wait-time"], "ped_cross_time":poly_value["ped-cross-time"], "ped_violation_count":poly_value["ped-violation-count"], "bike_violation_count":poly_value["bike-violation-count"], "ped_wait_time_max":poly_value["ped-wait-time-max"], "ped_cross_time_max":poly_value["ped-cross-time-max"], "time":datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+                val_to_append = {"id":key, 
+                                "class":"ped-bike", 
+                                "polygon":poly, 
+                                "ped_count":poly_value["ped-count"], 
+                                "bike_count":poly_value["bike-count"], 
+                                "ped_wait_time":poly_value["ped-wait-time"], 
+                                "ped_cross_time":poly_value["ped-cross-time"], 
+                                "ped_violation_count":poly_value["ped-violation-count"], 
+                                "bike_violation_count":poly_value["bike-violation-count"], 
+                                "ped_wait_time_max":poly_value["ped-wait-time-max"], 
+                                "ped_cross_time_max":poly_value["ped-cross-time-max"], 
+                                "time":datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                                "rddir":direc2,
+                                "start_direction":str(direc2)[0], 
+                                "end_direction":str(direc2)[1],
+                                "count":direc2_value,
+                                "start_road_name":value_srname_ername["start_road_name"], 
+                                "end_road_name":value_srname_ername["end_road_name"]}
                 print(json.dumps(val_to_append))
                 message_value = str(json.dumps(val_to_append)).encode('utf-8')
                 producer.send(topic, value=message_value)

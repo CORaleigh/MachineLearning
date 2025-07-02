@@ -228,7 +228,7 @@ cameras = set()
 #polygon_dictionary = set()
 #directions = ["NN", "NS", "NE", "NW", "SS", "SN", "SE", "SW", "EE", "EN", "ES", "EW", "WW", "WN", "WS", "WE"]
 directions = ["nn", "ns", "ne", "nw", "ss", "sn", "se", "sw", "ee", "en", "es", "ew", "ww", "wn", "ws", "we"]
-pedBikeCameras = ["3188"]
+bikepedonly = ["3188"]
 
 # set range to number of 15 minute segments the script should run for. i.e. 40 = 10 hours
 # script can be called outside docker container
@@ -367,7 +367,7 @@ for x in range(1,2):
     # for each camera
     for key, value in camera_dictionary.items():
         # if the camera is not a ped/bike only camera
-        if str(key) not in pedBikeCameras:
+        if str(key) not in bikepedonly:
             # for each camera direction
             for direc2, direc2_value in value.items():
                 if direc2_value > 0:
