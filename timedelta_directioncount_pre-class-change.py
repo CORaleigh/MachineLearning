@@ -30,7 +30,7 @@ import time
 ####camera stuff
 cameras = set()
 #polygon_dictionary = set()
-directions = ["NN", "NS", "NE", "NW", "SS", "SN", "SE", "SW", "EE", "EN", "ES", "EW", "WW", "WN", "WS", "WE"]
+directions = ["nn", "ns", "ne", "nw", "ss", "sn", "se", "sw", "ee", "en", "es", "ew", "ww", "wn", "ws", "we"]
 ################ change this to add more bike/ped only cameras ################
 bikepedonly = ["3157B", "3157A", "3156", "3156A"]
 ###############################################################################
@@ -45,7 +45,7 @@ for x in range(1,10800):
     final_op=[]
     now = datetime.now()
     # set future to seconds=15*60 for 15 minutes
-    future = now + timedelta(seconds=15*60)
+    future = now + timedelta(seconds=1*30)
     print("x=",x," ",now, future)
     consumer = KafkaConsumer('direction', bootstrap_servers='localhost:9092')
     for message in consumer:
@@ -63,14 +63,15 @@ for x in range(1,10800):
             for cam in cameras:
                 if cam not in camera_dictionary:
                     # if camera not in the output dictionary yet, add it with 0 for all directions
+                    print("adding camera ", cam, "to dictionary")
                     #camera_dictionary[cam] = {"NN":0, "NS":0, "NE":0, "NW":0, "SS":0, "SN":0, "SE":0, "SW":0, "EE":0, "EN":0, "ES":0, "EW":0, "WW":0, "WN":0, "WS":0, "WE":0}
-                    print("adding camera", cam, "to camera dictionary")
                     camera_dictionary[cam] = {"nn":0, "ns":0, "ne":0, "nw":0, "ss":0, "sn":0, "se":0, "sw":0, "ee":0, "en":0, "es":0, "ew":0, "ww":0, "wn":0, "ws":0, "we":0}
                 # if the cameras match
                 # use data['name'] to access values from the json stream
                 if camSensorId == cam:
+                    #print("camera match found")
                     if classType == "Person" or classType == "bicycle":
-                        #print("person found")
+                        #print("person or bike found")
                         # if the class is person or bike, add to polygon dictionary
                         if cam not in polygon_dictionary:
                             polygon_dictionary[cam] = {"n-crosswalk":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0},
@@ -111,7 +112,9 @@ for x in range(1,10800):
                                                         "w-lane-4":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}}
                         # check for polygons
                         for poly in data['polygons']:
+                            print(data['polygons'])
                             if poly in polygon_dictionary[cam]:
+                                print("starting polygon update")
                                 # increment count for polygons
                                 if classType=="bicycle":
                                     polygon_dictionary[cam][poly]["bike-count"] += 1
@@ -139,14 +142,16 @@ for x in range(1,10800):
                                 if 'crossing_time' in data and poly in data['crossing_time']:
                                     if data['crossing_time'][poly] > polygon_dictionary[cam][poly]["ped-cross-time-max"]:
                                         polygon_dictionary[cam][poly]["ped-cross-time-max"] = data['crossing_time'][poly]
+                                print(polygon_dictionary[cam])
 
                     elif classType == "car" or classType == "bus" or classType == "truck":
-                    # check all directions
+                        print("car, bus or truck found")
+                        # check all directions
                         for direc in directions:
-                            #print(cam, "direction", direc, str(data['start_direction']+data['end_direction']))
+                            print(cam, "direction", direc, str(data['start_direction']+data['end_direction']))
                             # if directions match. str() to handle null values.
                             if str(data['start_direction']) + str(data['end_direction']) == direc:
-                                #print('match found')
+                                print('match found')
                                 # add start/end road to road dictionary with key as 3029-NS:{start_road_name:, end_road_name:}
                                 if str(cam)+"-"+(direc) not in road_dictionary:
                                     road_dictionary[str(cam)+"-"+(direc)] = {"start_road_name":data['start_direction'], "end_road_name":data['end_direction']}
