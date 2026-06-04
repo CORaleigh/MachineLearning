@@ -43,6 +43,7 @@ bikepedonly = ["3157B", "3157A", "3156", "3156A"]
 for x in range(1,10800):
     #emptying result camera dictionary for the next iteration
     camera_dictionary = {}
+    processed_objects = set()
     road_dictionary = {}
     polygon_dictionary_ped = {}
     polygon_dictionary_bike = {}
@@ -64,6 +65,12 @@ for x in range(1,10800):
             camSensorId = data['sensor_id']
             classType = data['class']
             cameras.add(camSensorId)
+
+            objectId = data['object_id']
+            if objectId in processed_objects:
+                continue
+            processed_objects.add(objectId)
+            
             for cam in cameras:
                 if cam not in camera_dictionary:
                     # if camera not in the output dictionary yet, add it with 0 for all directions
