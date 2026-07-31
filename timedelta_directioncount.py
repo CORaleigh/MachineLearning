@@ -28,10 +28,12 @@ producer = KafkaProducer(bootstrap_servers=bootstrap_servers)
 consumer = KafkaConsumer('direction', bootstrap_servers='localhost:9092')
 
 ### time zone
-est = pytz.timezone('US/Eastern')
+est = pytz.timezone('America/New_York')
 
 ####camera stuff
 cameras = set()
+recent_crossings = {}
+crossing_cooldown_seconds = 3
 #polygon_dictionary_ped = set()
 directions = ["nn", "ns", "ne", "nw", "ss", "sn", "se", "sw", "ee", "en", "es", "ew", "ww", "wn", "ws", "we"]
 ################ change this to add more bike/ped only cameras ################
@@ -43,7 +45,7 @@ bikepedonly = ["3157B", "3157A", "3156", "3156A"]
 for x in range(1,10800):
     #emptying result camera dictionary for the next iteration
     camera_dictionary = {}
-    processed_objects = set()
+    recent_crossings = {}
     road_dictionary = {}
     polygon_dictionary_ped = {}
     polygon_dictionary_bike = {}
@@ -67,9 +69,18 @@ for x in range(1,10800):
             cameras.add(camSensorId)
 
             objectId = data['object_id']
-            if objectId in processed_objects:
+            direction_key = str(data.get('start_direction', '')) + str(data.get('end_direction', ''))
+            now_ts = time.time()
+
+            # prune stale dedup entries so a new crossing can be counted again after the cooldown
+            for stale_key, stale_ts in list(recent_crossings.items()):
+                if now_ts - stale_ts > crossing_cooldown_seconds:
+                    del recent_crossings[stale_key]
+
+            dedup_key = (camSensorId, objectId, classType, direction_key)
+            if dedup_key in recent_crossings:
                 continue
-            processed_objects.add(objectId)
+            recent_crossings[dedup_key] = now_ts
             
             for cam in cameras:
                 if cam not in camera_dictionary:
@@ -222,8 +233,9 @@ for x in range(1,10800):
                                     if data['crossing_time'][poly] > polygon_dictionary_bike[cam][poly]["ped-cross-time-max"]:
                                         polygon_dictionary_bike[cam][poly]["ped-cross-time-max"] = data['crossing_time'][poly]
                                 print(polygon_dictionary_bike[cam])
-
-                    elif classType == "car" or classType == "bus" or classType == "truck":
+                    # remove trucks and bus, just keep cars for now. 2027-07-31
+                    #elif classType == "car" or classType == "bus" or classType == "truck":
+                    elif classType == "car":
                         #print("car, bus or truck found")
                         # check all directions
                         for direc in directions:
