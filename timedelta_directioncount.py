@@ -25,15 +25,23 @@ topic = 'directioncount'
 producer = KafkaProducer(bootstrap_servers=bootstrap_servers)
 
 #consumer2= KafkaConsumer('directioncount', bootstrap_servers='localhost:9092')
-consumer = KafkaConsumer('direction', bootstrap_servers='localhost:9092')
+# One persistent consumer for the whole run. A stable group_id + committed offsets means the read
+# position carries across 15-minute windows, so messages that arrive while we roll a window and push
+# to the producer are picked up next window instead of being skipped. consumer_timeout_ms makes the
+# inner read loop return control during quiet periods so the window can still close on the boundary.
+consumer = KafkaConsumer('direction',
+                         bootstrap_servers='localhost:9092',
+                         group_id='directioncount-consumer',
+                         enable_auto_commit=True,
+                         auto_offset_reset='latest',
+                         consumer_timeout_ms=1000)
 
 ### time zone
 est = pytz.timezone('America/New_York')
 
 ####camera stuff
 cameras = set()
-recent_crossings = {}
-crossing_cooldown_seconds = 3
+processed_crossings = set()
 #polygon_dictionary_ped = set()
 directions = ["nn", "ns", "ne", "nw", "ss", "sn", "se", "sw", "ee", "en", "es", "ew", "ww", "wn", "ws", "we"]
 ################ change this to add more bike/ped only cameras ################
@@ -45,7 +53,8 @@ bikepedonly = ["3157B", "3157A", "3156", "3156A"]
 for x in range(1,10800):
     #emptying result camera dictionary for the next iteration
     camera_dictionary = {}
-    recent_crossings = {}
+    # reset per 15-min window so a recycled object_id can be counted again in the next window
+    processed_crossings = set()
     road_dictionary = {}
     polygon_dictionary_ped = {}
     polygon_dictionary_bike = {}
@@ -54,10 +63,14 @@ for x in range(1,10800):
     # set future to seconds=15*60 for 15 minutes
     future = now + timedelta(seconds=15*60)
     print("x=",x," ",now, future)
-    consumer = KafkaConsumer('direction', bootstrap_servers='localhost:9092')
-    for message in consumer:
-        # if time is still within the 15 minute segment
-        if datetime.now() < future:
+    # Keep pulling until the 15-minute boundary. The while condition also advances during quiet
+    # periods because consumer_timeout_ms ends the inner for-loop when no messages arrive, letting
+    # us re-check the clock instead of blocking on the next message.
+    while datetime.now() < future:
+        for message in consumer:
+            # stop pulling once we're past the 15-minute boundary
+            if datetime.now() >= future:
+                break
             # Decode message value from bytes to string
             message_value = message.value.decode('utf-8')
             # Parse JSON data
@@ -69,19 +82,21 @@ for x in range(1,10800):
             cameras.add(camSensorId)
 
             objectId = data['object_id']
-            direction_key = str(data.get('start_direction', '')) + str(data.get('end_direction', ''))
-            now_ts = time.time()
-
-            # prune stale dedup entries so a new crossing can be counted again after the cooldown
-            for stale_key, stale_ts in list(recent_crossings.items()):
-                if now_ts - stale_ts > crossing_cooldown_seconds:
-                    del recent_crossings[stale_key]
-
-            dedup_key = (camSensorId, objectId, classType, direction_key)
-            if dedup_key in recent_crossings:
+            # Dedup on the crossing's own stable identity carried in the message, NOT on wall-clock
+            # consumption time. Each trajectory_data message is one completed crossing; the feed can
+            # republish the same crossing multiple times, which is what inflates the counts. _id is
+            # unique per record; start/end_timestamp are DeepStream's event times for this crossing,
+            # so they stay identical across duplicate publishes but differ for a recycled object_id.
+            crossing_id = data.get('_id') or (
+                camSensorId,
+                objectId,
+                data.get('start_timestamp'),
+                data.get('end_timestamp'),
+            )
+            if crossing_id in processed_crossings:
                 continue
-            recent_crossings[dedup_key] = now_ts
-            
+            processed_crossings.add(crossing_id)
+
             for cam in cameras:
                 if cam not in camera_dictionary:
                     # if camera not in the output dictionary yet, add it with 0 for all directions
@@ -253,10 +268,6 @@ for x in range(1,10800):
 
             final_op.append(data)
             #print(len(final_op))
-        else:
-            print("end time ", datetime.now())
-            # close the consumer, otherwise the loop will not go to the next iteration
-            consumer.close()
 
 
     ##### put logic here to push to producer
