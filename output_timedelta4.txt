@@ -1,0 +1,729 @@
+Topic Name: ['directioncount']
+Listening to all Kafka topics: directioncount
+
+Topic: directioncount
+Received:
+{
+    "id": "111A",
+    "class": "vehicle",
+    "polygon": "",
+    "ped_count": "",
+    "bike_count": "",
+    "ped_wait_time": "",
+    "ped_cross_time": "",
+    "ped_violation_count": "",
+    "bike_violation_count": "",
+    "ped_wait_time_max": "",
+    "ped_cross_time_max": "",
+    "time": "2026-08-21 15:42:16",
+    "rddir": "ew",
+    "start_direction": "e",
+    "end_direction": "w",
+    "count": 71,
+    "start_road_name": "e",
+    "end_road_name": "w",
+    "bikepedonly": "false"
+}
+-----------------------------------
+
+Topic: directioncount
+Received:
+{
+    "id": "111A",
+    "class": "vehicle",
+    "polygon": "",
+    "ped_count": "",
+    "bike_count": "",
+    "ped_wait_time": "",
+    "ped_cross_time": "",
+    "ped_violation_count": "",
+    "bike_violation_count": "",
+    "ped_wait_time_max": "",
+    "ped_cross_time_max": "",
+    "time": "2026-08-21 15:42:16",
+    "rddir": "wn",
+    "start_direction": "w",
+    "end_direction": "n",
+    "count": 4,
+    "start_road_name": "w",
+    "end_road_name": "n",
+    "bikepedonly": "false"
+}
+-----------------------------------
+
+Topic: directioncount
+Received:
+{
+    "id": "111A",
+    "class": "vehicle",
+    "polygon": "",
+    "ped_count": "",
+    "bike_count": "",
+    "ped_wait_time": "",
+    "ped_cross_time": "",
+    "ped_violation_count": "",
+    "bike_violation_count": "",
+    "ped_wait_time_max": "",
+    "ped_cross_time_max": "",
+    "time": "2026-08-21 15:42:16",
+    "rddir": "ws",
+    "start_direction": "w",
+    "end_direction": "s",
+    "count": 2,
+    "start_road_name": "w",
+    "end_road_name": "s",
+    "bikepedonly": "false"
+}
+-----------------------------------
+
+Topic: directioncount
+Received:
+{
+    "id": "111A",
+    "class": "vehicle",
+    "polygon": "",
+    "ped_count": "",
+    "bike_count": "",
+    "ped_wait_time": "",
+    "ped_cross_time": "",
+    "ped_violation_count": "",
+    "bike_violation_count": "",
+    "ped_wait_time_max": "",
+    "ped_cross_time_max": "",
+    "time": "2026-08-21 15:43:17",
+    "rddir": "nw",
+    "start_direction": "n",
+    "end_direction": "w",
+    "count": 6,
+    "start_road_name": "n",
+    "end_road_name": "w",
+    "bikepedonly": "false"
+}
+-----------------------------------
+
+Topic: directioncount
+Received:
+{
+    "id": "111A",
+    "class": "vehicle",
+    "polygon": "",
+    "ped_count": "",
+    "bike_count": "",
+    "ped_wait_time": "",
+    "ped_cross_time": "",
+    "ped_violation_count": "",
+    "bike_violation_count": "",
+    "ped_wait_time_max": "",
+    "ped_cross_time_max": "",
+    "time": "2026-08-21 15:43:17",
+    "rddir": "ww",
+    "start_direction": "w",
+    "end_direction": "w",
+    "count": 18,
+    "start_road_name": "w",
+    "end_road_name": "w",
+    "bikepedonly": "false"
+}
+-----------------------------------
+
+Topic: directioncount
+Received:
+{
+    "id": "111A",
+    "class": "vehicle",
+    "polygon": "",
+    "ped_count": "",
+    "bike_count": "",
+    "ped_wait_time": "",
+    "ped_cross_time": "",
+    "ped_violation_count": "",
+    "bike_violation_count": "",
+    "ped_wait_time_max": "",
+    "ped_cross_time_max": "",
+    "time": "2026-08-21 15:43:17",
+    "rddir": "en",
+    "start_direction": "e",
+    "end_direction": "n",
+    "count": 3,
+    "start_road_name": "e",
+    "end_road_name": "n",
+    "bikepedonly": "false"
+}
+-----------------------------------
+
+Topic: directioncount
+Received:
+{
+    "id": "111A",
+    "class": "ped",
+    "polygon": "s-crosswalk",
+    "ped_count": 7,
+    "bike_count": "",
+    "ped_wait_time": 0,
+    "ped_cross_time": 0,
+    "ped_violation_count": 0,
+    "bike_violation_count": 0,
+    "ped_wait_time_max": 0,
+    "ped_cross_time_max": 0,
+    "time": "2026-08-21 15:43:17",
+    "rddir": "",
+    "start_direction": "",
+    "end_direction": "",
+    "count": "",
+    "start_road_name": "",
+    "end_road_name": "",
+    "bikepedonly": "false"
+}
+-----------------------------------
+
+Topic: directioncount
+Received:
+{
+    "id": "111A",
+    "class": "ped",
+    "polygon": "w-crosswalk",
+    "ped_count": 3,
+    "bike_count": "",
+    "ped_wait_time": 0,
+    "ped_cross_time": 0,
+    "ped_violation_count": 0,
+    "bike_violation_count": 0,
+    "ped_wait_time_max": 0,
+    "ped_cross_time_max": 0,
+    "time": "2026-08-21 15:43:17",
+    "rddir": "",
+    "start_direction": "",
+    "end_direction": "",
+    "count": "",
+    "start_road_name": "",
+    "end_road_name": "",
+    "bikepedonly": "false"
+}
+-----------------------------------
+
+Topic: directioncount
+Received:
+{
+    "id": "111A",
+    "class": "vehicle",
+    "polygon": "",
+    "ped_count": "",
+    "bike_count": "",
+    "ped_wait_time": "",
+    "ped_cross_time": "",
+    "ped_violation_count": "",
+    "bike_violation_count": "",
+    "ped_wait_time_max": "",
+    "ped_cross_time_max": "",
+    "time": "2026-08-21 15:44:17",
+    "rddir": "ss",
+    "start_direction": "s",
+    "end_direction": "s",
+    "count": 3,
+    "start_road_name": "s",
+    "end_road_name": "s",
+    "bikepedonly": "false"
+}
+-----------------------------------
+
+Topic: directioncount
+Received:
+{
+    "id": "111A",
+    "class": "ped",
+    "polygon": "n-crosswalk",
+    "ped_count": 11,
+    "bike_count": "",
+    "ped_wait_time": 0,
+    "ped_cross_time": 0,
+    "ped_violation_count": 0,
+    "bike_violation_count": 0,
+    "ped_wait_time_max": 0,
+    "ped_cross_time_max": 0,
+    "time": "2026-08-21 15:44:17",
+    "rddir": "",
+    "start_direction": "",
+    "end_direction": "",
+    "count": "",
+    "start_road_name": "",
+    "end_road_name": "",
+    "bikepedonly": "false"
+}
+-----------------------------------
+
+Topic: directioncount
+Received:
+{
+    "id": "111A",
+    "class": "ped",
+    "polygon": "e-crosswalk",
+    "ped_count": 12,
+    "bike_count": "",
+    "ped_wait_time": 0,
+    "ped_cross_time": 0,
+    "ped_violation_count": 0,
+    "bike_violation_count": 0,
+    "ped_wait_time_max": 0,
+    "ped_cross_time_max": 0,
+    "time": "2026-08-21 15:44:17",
+    "rddir": "",
+    "start_direction": "",
+    "end_direction": "",
+    "count": "",
+    "start_road_name": "",
+    "end_road_name": "",
+    "bikepedonly": "false"
+}
+-----------------------------------
+
+Topic: directioncount
+Received:
+{
+    "id": "111A",
+    "class": "ped",
+    "polygon": "w-crosswalk",
+    "ped_count": 2,
+    "bike_count": "",
+    "ped_wait_time": 0,
+    "ped_cross_time": 0,
+    "ped_violation_count": 0,
+    "bike_violation_count": 0,
+    "ped_wait_time_max": 0,
+    "ped_cross_time_max": 0,
+    "time": "2026-08-21 15:44:17",
+    "rddir": "",
+    "start_direction": "",
+    "end_direction": "",
+    "count": "",
+    "start_road_name": "",
+    "end_road_name": "",
+    "bikepedonly": "false"
+}
+-----------------------------------
+
+Topic: directioncount
+Received:
+{
+    "id": "111A",
+    "class": "vehicle",
+    "polygon": "",
+    "ped_count": "",
+    "bike_count": "",
+    "ped_wait_time": "",
+    "ped_cross_time": "",
+    "ped_violation_count": "",
+    "bike_violation_count": "",
+    "ped_wait_time_max": "",
+    "ped_cross_time_max": "",
+    "time": "2026-08-21 15:44:17",
+    "rddir": "nw",
+    "start_direction": "n",
+    "end_direction": "w",
+    "count": 5,
+    "start_road_name": "n",
+    "end_road_name": "w",
+    "bikepedonly": "false"
+}
+-----------------------------------
+
+Topic: directioncount
+Received:
+{
+    "id": "111A",
+    "class": "vehicle",
+    "polygon": "",
+    "ped_count": "",
+    "bike_count": "",
+    "ped_wait_time": "",
+    "ped_cross_time": "",
+    "ped_violation_count": "",
+    "bike_violation_count": "",
+    "ped_wait_time_max": "",
+    "ped_cross_time_max": "",
+    "time": "2026-08-21 15:44:17",
+    "rddir": "wn",
+    "start_direction": "w",
+    "end_direction": "n",
+    "count": 2,
+    "start_road_name": "w",
+    "end_road_name": "n",
+    "bikepedonly": "false"
+}
+-----------------------------------
+
+Topic: directioncount
+Received:
+{
+    "id": "111A",
+    "class": "vehicle",
+    "polygon": "",
+    "ped_count": "",
+    "bike_count": "",
+    "ped_wait_time": "",
+    "ped_cross_time": "",
+    "ped_violation_count": "",
+    "bike_violation_count": "",
+    "ped_wait_time_max": "",
+    "ped_cross_time_max": "",
+    "time": "2026-08-21 15:44:17",
+    "rddir": "we",
+    "start_direction": "w",
+    "end_direction": "e",
+    "count": 72,
+    "start_road_name": "w",
+    "end_road_name": "e",
+    "bikepedonly": "false"
+}
+-----------------------------------
+
+Topic: directioncount
+Received:
+{
+    "id": "111A",
+    "class": "ped",
+    "polygon": "e-crosswalk",
+    "ped_count": 5,
+    "bike_count": "",
+    "ped_wait_time": 0,
+    "ped_cross_time": 0,
+    "ped_violation_count": 0,
+    "bike_violation_count": 0,
+    "ped_wait_time_max": 0,
+    "ped_cross_time_max": 0,
+    "time": "2026-08-21 15:45:17",
+    "rddir": "",
+    "start_direction": "",
+    "end_direction": "",
+    "count": "",
+    "start_road_name": "",
+    "end_road_name": "",
+    "bikepedonly": "false"
+}
+-----------------------------------
+
+Topic: directioncount
+Received:
+{
+    "id": "111A",
+    "class": "ped",
+    "polygon": "w-crosswalk",
+    "ped_count": 2,
+    "bike_count": "",
+    "ped_wait_time": 0,
+    "ped_cross_time": 0,
+    "ped_violation_count": 0,
+    "bike_violation_count": 0,
+    "ped_wait_time_max": 0,
+    "ped_cross_time_max": 0,
+    "time": "2026-08-21 15:45:17",
+    "rddir": "",
+    "start_direction": "",
+    "end_direction": "",
+    "count": "",
+    "start_road_name": "",
+    "end_road_name": "",
+    "bikepedonly": "false"
+}
+-----------------------------------
+
+Topic: directioncount
+Received:
+{
+    "id": "111A",
+    "class": "vehicle",
+    "polygon": "",
+    "ped_count": "",
+    "bike_count": "",
+    "ped_wait_time": "",
+    "ped_cross_time": "",
+    "ped_violation_count": "",
+    "bike_violation_count": "",
+    "ped_wait_time_max": "",
+    "ped_cross_time_max": "",
+    "time": "2026-08-21 15:46:17",
+    "rddir": "ee",
+    "start_direction": "e",
+    "end_direction": "e",
+    "count": 1,
+    "start_road_name": "e",
+    "end_road_name": "e",
+    "bikepedonly": "false"
+}
+-----------------------------------
+
+Topic: directioncount
+Received:
+{
+    "id": "111A",
+    "class": "vehicle",
+    "polygon": "",
+    "ped_count": "",
+    "bike_count": "",
+    "ped_wait_time": "",
+    "ped_cross_time": "",
+    "ped_violation_count": "",
+    "bike_violation_count": "",
+    "ped_wait_time_max": "",
+    "ped_cross_time_max": "",
+    "time": "2026-08-21 15:46:17",
+    "rddir": "ww",
+    "start_direction": "w",
+    "end_direction": "w",
+    "count": 8,
+    "start_road_name": "w",
+    "end_road_name": "w",
+    "bikepedonly": "false"
+}
+-----------------------------------
+
+Topic: directioncount
+Received:
+{
+    "id": "111A",
+    "class": "vehicle",
+    "polygon": "",
+    "ped_count": "",
+    "bike_count": "",
+    "ped_wait_time": "",
+    "ped_cross_time": "",
+    "ped_violation_count": "",
+    "bike_violation_count": "",
+    "ped_wait_time_max": "",
+    "ped_cross_time_max": "",
+    "time": "2026-08-21 15:46:17",
+    "rddir": "we",
+    "start_direction": "w",
+    "end_direction": "e",
+    "count": 69,
+    "start_road_name": "w",
+    "end_road_name": "e",
+    "bikepedonly": "false"
+}
+-----------------------------------
+
+Topic: directioncount
+Received:
+{
+    "id": "111A",
+    "class": "vehicle",
+    "polygon": "",
+    "ped_count": "",
+    "bike_count": "",
+    "ped_wait_time": "",
+    "ped_cross_time": "",
+    "ped_violation_count": "",
+    "bike_violation_count": "",
+    "ped_wait_time_max": "",
+    "ped_cross_time_max": "",
+    "time": "2026-08-21 15:47:18",
+    "rddir": "ne",
+    "start_direction": "n",
+    "end_direction": "e",
+    "count": 3,
+    "start_road_name": "n",
+    "end_road_name": "e",
+    "bikepedonly": "false"
+}
+-----------------------------------
+
+Topic: directioncount
+Received:
+{
+    "id": "111A",
+    "class": "vehicle",
+    "polygon": "",
+    "ped_count": "",
+    "bike_count": "",
+    "ped_wait_time": "",
+    "ped_cross_time": "",
+    "ped_violation_count": "",
+    "bike_violation_count": "",
+    "ped_wait_time_max": "",
+    "ped_cross_time_max": "",
+    "time": "2026-08-21 15:48:19",
+    "rddir": "ss",
+    "start_direction": "s",
+    "end_direction": "s",
+    "count": 1,
+    "start_road_name": "s",
+    "end_road_name": "s",
+    "bikepedonly": "false"
+}
+-----------------------------------
+
+Topic: directioncount
+Received:
+{
+    "id": "111A",
+    "class": "vehicle",
+    "polygon": "",
+    "ped_count": "",
+    "bike_count": "",
+    "ped_wait_time": "",
+    "ped_cross_time": "",
+    "ped_violation_count": "",
+    "bike_violation_count": "",
+    "ped_wait_time_max": "",
+    "ped_cross_time_max": "",
+    "time": "2026-08-21 15:48:19",
+    "rddir": "wn",
+    "start_direction": "w",
+    "end_direction": "n",
+    "count": 2,
+    "start_road_name": "w",
+    "end_road_name": "n",
+    "bikepedonly": "false"
+}
+-----------------------------------
+
+Topic: directioncount
+Received:
+{
+    "id": "111A",
+    "class": "ped",
+    "polygon": "s-crosswalk",
+    "ped_count": 7,
+    "bike_count": "",
+    "ped_wait_time": 0,
+    "ped_cross_time": 0,
+    "ped_violation_count": 0,
+    "bike_violation_count": 0,
+    "ped_wait_time_max": 0,
+    "ped_cross_time_max": 0,
+    "time": "2026-08-21 15:48:19",
+    "rddir": "",
+    "start_direction": "",
+    "end_direction": "",
+    "count": "",
+    "start_road_name": "",
+    "end_road_name": "",
+    "bikepedonly": "false"
+}
+-----------------------------------
+
+Topic: directioncount
+Received:
+{
+    "id": "111A",
+    "class": "vehicle",
+    "polygon": "",
+    "ped_count": "",
+    "bike_count": "",
+    "ped_wait_time": "",
+    "ped_cross_time": "",
+    "ped_violation_count": "",
+    "bike_violation_count": "",
+    "ped_wait_time_max": "",
+    "ped_cross_time_max": "",
+    "time": "2026-08-21 15:48:19",
+    "rddir": "ws",
+    "start_direction": "w",
+    "end_direction": "s",
+    "count": 1,
+    "start_road_name": "w",
+    "end_road_name": "s",
+    "bikepedonly": "false"
+}
+-----------------------------------
+
+Topic: directioncount
+Received:
+{
+    "id": "111A",
+    "class": "vehicle",
+    "polygon": "",
+    "ped_count": "",
+    "bike_count": "",
+    "ped_wait_time": "",
+    "ped_cross_time": "",
+    "ped_violation_count": "",
+    "bike_violation_count": "",
+    "ped_wait_time_max": "",
+    "ped_cross_time_max": "",
+    "time": "2026-08-21 15:48:19",
+    "rddir": "we",
+    "start_direction": "w",
+    "end_direction": "e",
+    "count": 69,
+    "start_road_name": "w",
+    "end_road_name": "e",
+    "bikepedonly": "false"
+}
+-----------------------------------
+
+Topic: directioncount
+Received:
+{
+    "id": "111A",
+    "class": "vehicle",
+    "polygon": "",
+    "ped_count": "",
+    "bike_count": "",
+    "ped_wait_time": "",
+    "ped_cross_time": "",
+    "ped_violation_count": "",
+    "bike_violation_count": "",
+    "ped_wait_time_max": "",
+    "ped_cross_time_max": "",
+    "time": "2026-08-21 15:49:19",
+    "rddir": "ws",
+    "start_direction": "w",
+    "end_direction": "s",
+    "count": 1,
+    "start_road_name": "w",
+    "end_road_name": "s",
+    "bikepedonly": "false"
+}
+-----------------------------------
+
+Topic: directioncount
+Received:
+{
+    "id": "111A",
+    "class": "ped",
+    "polygon": "s-crosswalk",
+    "ped_count": 2,
+    "bike_count": "",
+    "ped_wait_time": 0,
+    "ped_cross_time": 0,
+    "ped_violation_count": 0,
+    "bike_violation_count": 0,
+    "ped_wait_time_max": 0,
+    "ped_cross_time_max": 0,
+    "time": "2026-08-21 15:49:19",
+    "rddir": "",
+    "start_direction": "",
+    "end_direction": "",
+    "count": "",
+    "start_road_name": "",
+    "end_road_name": "",
+    "bikepedonly": "false"
+}
+-----------------------------------
+
+Topic: directioncount
+Received:
+{
+    "id": "111A",
+    "class": "vehicle",
+    "polygon": "",
+    "ped_count": "",
+    "bike_count": "",
+    "ped_wait_time": "",
+    "ped_cross_time": "",
+    "ped_violation_count": "",
+    "bike_violation_count": "",
+    "ped_wait_time_max": "",
+    "ped_cross_time_max": "",
+    "time": "2026-08-21 15:49:19",
+    "rddir": "we",
+    "start_direction": "w",
+    "end_direction": "e",
+    "count": 27,
+    "start_road_name": "w",
+    "end_road_name": "e",
+    "bikepedonly": "false"
+}
+-----------------------------------
+
+Stopping Kafka consumer...

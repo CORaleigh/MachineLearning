@@ -1,428 +1,288 @@
- # timedelta_directioncount_new.py
- # This script consumes messages from a Kafka topic named 'direction', 
- # processes the data to count vehicle and pedestrian movements in various directions, 
- # and produces aggregated results back to a Kafka topic named 'directioncount'.
+# timedelta_directioncount.py
+# Consumes messages from Kafka topic 'direction', aggregates vehicle/pedestrian/bike
+# movements per time window, and produces aggregated results to topic 'directioncount'.
+#
+# Counting model: each 'direction' message is one completed crossing. We accumulate
+# counts for a fixed wall-clock window, emit at the boundary, then reset and start the
+# next window.
+#
+# NOTE ON THE OVERCOUNT FIX (2026-08): the previous version wrapped `for message in
+# consumer` inside `while now < future` and re-entered the iterator every window while
+# resetting the dedup set. A rebalance / uncommitted-offset replay at the window boundary
+# then re-delivered the same messages, and they were recounted fresh -- inflating counts
+# (~2x at 15-min windows, worse at shorter windows, since the recount scales with the
+# number of window boundaries). This version consumes with a single poll() loop, commits
+# offsets manually at each emit, and dedups on (partition, offset) so no message is ever
+# counted twice.
 
-
-from kafka import KafkaConsumer
-from kafka import KafkaProducer
+from kafka import KafkaConsumer, KafkaProducer
 import json
-import time
-import datetime
 import pytz
 from datetime import datetime, timedelta
-import time
 
-global final_op
-final_op =[]
-        
-# Set up Kafka consumer
-# Kafka broker address
-bootstrap_servers = 'localhost:9092'
-# Kafka topic to which you want to send the data
-topic = 'directioncount'
-# Create a Kafka producer instance
-producer = KafkaProducer(bootstrap_servers=bootstrap_servers)
+# ---------------------------------------------------------------------------
+# Configuration
+# ---------------------------------------------------------------------------
+BOOTSTRAP_SERVERS = 'localhost:9092'
+IN_TOPIC = 'direction'
+OUT_TOPIC = 'directioncount'
+# Aggregation window. 15*60 = 15 minutes (production). Set to 1*60 for 1-minute testing.
+WINDOW_SECONDS = 15 * 60
+# How long each poll() waits for records before returning control so the window clock
+# can be re-checked during quiet periods.
+POLL_TIMEOUT_MS = 1000
 
-#consumer2= KafkaConsumer('directioncount', bootstrap_servers='localhost:9092')
-# One persistent consumer for the whole run. A stable group_id + committed offsets means the read
-# position carries across 15-minute windows, so messages that arrive while we roll a window and push
-# to the producer are picked up next window instead of being skipped. consumer_timeout_ms makes the
-# inner read loop return control during quiet periods so the window can still close on the boundary.
-consumer = KafkaConsumer('direction',
-                         bootstrap_servers='localhost:9092',
-                         group_id='directioncount-consumer',
-                         enable_auto_commit=True,
-                         auto_offset_reset='latest',
-                         consumer_timeout_ms=1000)
-
-### time zone
 est = pytz.timezone('America/New_York')
 
-####camera stuff
-cameras = set()
-processed_crossings = set()
-#polygon_dictionary_ped = set()
-directions = ["nn", "ns", "ne", "nw", "ss", "sn", "se", "sw", "ee", "en", "es", "ew", "ww", "wn", "ws", "we"]
+directions = ["nn", "ns", "ne", "nw", "ss", "sn", "se", "sw",
+              "ee", "en", "es", "ew", "ww", "wn", "ws", "we"]
+
 ################ change this to add more bike/ped only cameras ################
 bikepedonly = ["3157B", "3157A", "3156", "3156A"]
 ###############################################################################
 
-# set range to number of 15 minute segments the script should run for. i.e. 40 = 10 hours
-# script can be called outside docker container
-for x in range(1,10800):
-    #emptying result camera dictionary for the next iteration
-    camera_dictionary = {}
-    # reset per 15-min window so a recycled object_id can be counted again in the next window
-    processed_crossings = set()
-    road_dictionary = {}
-    polygon_dictionary_ped = {}
-    polygon_dictionary_bike = {}
-    final_op=[]
-    now = datetime.now()
-    # set future to seconds=15*60 for 15 minutes
-    future = now + timedelta(seconds=15*60)
-    print("x=",x," ",now, future)
-    # Keep pulling until the 15-minute boundary. The while condition also advances during quiet
-    # periods because consumer_timeout_ms ends the inner for-loop when no messages arrive, letting
-    # us re-check the clock instead of blocking on the next message.
-    while datetime.now() < future:
-        for message in consumer:
-            # stop pulling once we're past the 15-minute boundary
-            if datetime.now() >= future:
-                break
-            # Decode message value from bytes to string
-            message_value = message.value.decode('utf-8')
-            # Parse JSON data
-            data = json.loads(message_value)
-            # Process the received JSON data
-            # 2025-02-10 new cameras using set
-            camSensorId = data['sensor_id']
-            classType = data['class']
-            cameras.add(camSensorId)
+# Polygon record template ---------------------------------------------------
+# Built once by a factory instead of repeating the same ~36-key literal in three places,
+# which kept the ped/bike copies from drifting apart.
+POLYGON_NAMES = [
+    "n-crosswalk", "s-crosswalk", "e-crosswalk", "w-crosswalk",
+    "w-sidewalk-n", "w-sidewalk-s", "s-sidewalk-w", "s-sidewalk-e",
+    "e-sidewalk-s", "e-sidewalk-n", "n-sidewalk-e", "n-sidewalk-w",
+    "w-bikelane-wb", "w-bikelane-eb", "s-bikelane-sb", "s-bikelane-nb",
+    "e-bikelane-eb", "e-bikelane-wb", "n-bikelane-nb", "n-bikelane-sb",
+    "n-lane-1", "n-lane-2", "n-lane-3", "n-lane-4",
+    "s-lane-1", "s-lane-2", "s-lane-3", "s-lane-4",
+    "e-lane-1", "e-lane-2", "e-lane-3", "e-lane-4",
+    "w-lane-1", "w-lane-2", "w-lane-3", "w-lane-4",
+]
+PED_FIELDS = (
+    "ped-count", "bike-count", "ped-wait-time", "ped-cross-time",
+    "ped-violation-count", "bike-violation-count", "ped-wait-time-max", "ped-cross-time-max",
+)
 
-            objectId = data['object_id']
-            # Dedup on the crossing's own stable identity carried in the message, NOT on wall-clock
-            # consumption time. Each trajectory_data message is one completed crossing; the feed can
-            # republish the same crossing multiple times, which is what inflates the counts. _id is
-            # unique per record; start/end_timestamp are DeepStream's event times for this crossing,
-            # so they stay identical across duplicate publishes but differ for a recycled object_id.
-            crossing_id = data.get('_id') or (
-                camSensorId,
-                objectId,
-                data.get('start_timestamp'),
-                data.get('end_timestamp'),
-            )
-            if crossing_id in processed_crossings:
+
+def new_polygon_record():
+    """One camera's per-polygon counters, all zeroed."""
+    return {name: {field: 0 for field in PED_FIELDS} for name in POLYGON_NAMES}
+
+
+def now_est():
+    """Current time formatted in America/New_York, as used in every emitted record."""
+    return datetime.now().astimezone(est).strftime("%Y-%m-%d %H:%M:%S")
+
+
+class WindowState:
+    """All the per-window accumulators. Recreated at every window boundary so a new
+    window starts from zero and nothing carries over."""
+
+    def __init__(self):
+        self.camera_dictionary = {}        # cam -> {direction: count}
+        self.road_dictionary = {}          # "cam-direction" -> {start_road_name, end_road_name}
+        self.polygon_dictionary_ped = {}   # cam -> polygon record (ped)
+        self.polygon_dictionary_bike = {}  # cam -> polygon record (bike)
+        self.seen_offsets = set()          # (partition, offset) already counted this window
+        self.message_count = 0
+
+
+# ---------------------------------------------------------------------------
+# Counting
+# ---------------------------------------------------------------------------
+def process_message(data, state):
+    """Fold one 'direction' message into the current window's accumulators."""
+    camSensorId = data['sensor_id']
+    classType = data['class']
+
+    if classType == "Person":
+        rec = state.polygon_dictionary_ped.setdefault(camSensorId, new_polygon_record())
+        _count_polygons(data, rec, count_field="ped-count", violation_field="ped-violation-count",
+                        is_bike=False)
+
+    elif classType == "bicycle":
+        rec = state.polygon_dictionary_bike.setdefault(camSensorId, new_polygon_record())
+        _count_polygons(data, rec, count_field="bike-count", violation_field="bike-violation-count",
+                        is_bike=True)
+
+    elif classType == "car":
+        cam_dirs = state.camera_dictionary.setdefault(camSensorId, {d: 0 for d in directions})
+        direction = str(data['start_direction']) + str(data['end_direction'])
+        # Only count recognized directions; "unknownunknown" etc. fall through, as before.
+        if direction in cam_dirs:
+            key = str(camSensorId) + "-" + direction
+            if key not in state.road_dictionary:
+                state.road_dictionary[key] = {"start_road_name": data['start_direction'],
+                                              "end_road_name": data['end_direction']}
+            cam_dirs[direction] += 1
+
+
+def _count_polygons(data, rec, count_field, violation_field, is_bike):
+    """Shared ped/bike per-polygon accumulation (they differ only in which count/violation
+    field is incremented and how the violation is looked up)."""
+    waiting = data.get('waiting_time')
+    crossing = data.get('crossing_time')
+    vd = data.get('violation_details')
+    is_violation = data.get('violation') is True
+
+    for poly in data.get('polygons', []):
+        if poly not in rec:
+            continue
+        cell = rec[poly]
+        cell[count_field] += 1
+
+        if isinstance(waiting, dict) and poly in waiting:
+            cell["ped-wait-time"] += waiting[poly]
+            if waiting[poly] > cell["ped-wait-time-max"]:
+                cell["ped-wait-time-max"] = waiting[poly]
+        if isinstance(crossing, dict) and poly in crossing:
+            cell["ped-cross-time"] += crossing[poly]
+            if crossing[poly] > cell["ped-cross-time-max"]:
+                cell["ped-cross-time-max"] = crossing[poly]
+
+        if is_violation:
+            if is_bike:
+                # bike violations are keyed under violation_details['pedestrian_lane']
+                if isinstance(vd, dict) and poly in vd.get('pedestrian_lane', ''):
+                    cell[violation_field] += 1
+            else:
+                if isinstance(vd, (str, dict, list)) and poly in vd:
+                    cell[violation_field] += 1
+
+
+# ---------------------------------------------------------------------------
+# Emit
+# ---------------------------------------------------------------------------
+def _send(producer, val):
+    producer.send(OUT_TOPIC, value=json.dumps(val).encode('utf-8'))
+    print("sending to topic", OUT_TOPIC, "value", val)
+
+
+def emit_window(state, producer):
+    """Push one aggregated record per non-zero (camera, direction) and per non-zero
+    (camera, polygon) to the output topic."""
+    stamp = now_est()
+
+    # Vehicles: per camera (excluding bike/ped-only cameras), per direction with count > 0.
+    for cam, dir_counts in state.camera_dictionary.items():
+        if str(cam) in bikepedonly:
+            continue
+        print(str(cam), ":", dir_counts)
+        for direc, count in dir_counts.items():
+            if count <= 0:
                 continue
-            processed_crossings.add(crossing_id)
+            roads = state.road_dictionary.get(str(cam) + "-" + str(direc))
+            if roads is None:
+                continue
+            _send(producer, {
+                "id": cam, "class": "vehicle", "polygon": "",
+                "ped_count": "", "bike_count": "", "ped_wait_time": "", "ped_cross_time": "",
+                "ped_violation_count": "", "bike_violation_count": "",
+                "ped_wait_time_max": "", "ped_cross_time_max": "",
+                "time": stamp, "rddir": direc,
+                "start_direction": str(direc)[0], "end_direction": str(direc)[1],
+                "count": count,
+                "start_road_name": roads["start_road_name"], "end_road_name": roads["end_road_name"],
+                "bikepedonly": "false",
+            })
 
-            for cam in cameras:
-                if cam not in camera_dictionary:
-                    # if camera not in the output dictionary yet, add it with 0 for all directions
-                    print("adding camera ", cam, "to dictionary")
-                    #camera_dictionary[cam] = {"NN":0, "NS":0, "NE":0, "NW":0, "SS":0, "SN":0, "SE":0, "SW":0, "EE":0, "EN":0, "ES":0, "EW":0, "WW":0, "WN":0, "WS":0, "WE":0}
-                    camera_dictionary[cam] = {"nn":0, "ns":0, "ne":0, "nw":0, "ss":0, "sn":0, "se":0, "sw":0, "ee":0, "en":0, "es":0, "ew":0, "ww":0, "wn":0, "ws":0, "we":0}
-                # if the cameras match
-                # use data['name'] to access values from the json stream
-                if camSensorId == cam:
-                    #print("camera match found")
-                    if classType == "Person":
-                        #print("person or bike found")
-                        # if the class is person or bike, add to polygon dictionary
-                        if cam not in polygon_dictionary_ped:
-                            polygon_dictionary_ped[cam] = {"n-crosswalk":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0},
-                                                        "s-crosswalk":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0},
-                                                        "e-crosswalk":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0},
-                                                        "w-crosswalk":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0},
-                                                        "w-sidewalk-n":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0},
-                                                        "w-sidewalk-s":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}, 
-                                                        "s-sidewalk-w":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}, 
-                                                        "s-sidewalk-e":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}, 
-                                                        "e-sidewalk-s":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}, 
-                                                        "e-sidewalk-n":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}, 
-                                                        "n-sidewalk-e":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}, 
-                                                        "n-sidewalk-w":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}, 
-                                                        "w-bikelane-wb":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}, 
-                                                        "w-bikelane-eb":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}, 
-                                                        "s-bikelane-sb":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}, 
-                                                        "s-bikelane-nb":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}, 
-                                                        "e-bikelane-eb":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}, 
-                                                        "e-bikelane-wb":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}, 
-                                                        "n-bikelane-nb":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}, 
-                                                        "n-bikelane-sb":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}, 
-                                                        "n-lane-1":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}, 
-                                                        "n-lane-2":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}, 
-                                                        "n-lane-3":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}, 
-                                                        "n-lane-4":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}, 
-                                                        "s-lane-1":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}, 
-                                                        "s-lane-2":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}, 
-                                                        "s-lane-3":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}, 
-                                                        "s-lane-4":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}, 
-                                                        "e-lane-1":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}, 
-                                                        "e-lane-2":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}, 
-                                                        "e-lane-3":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}, 
-                                                        "e-lane-4":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}, 
-                                                        "w-lane-1":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}, 
-                                                        "w-lane-2":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}, 
-                                                        "w-lane-3":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}, 
-                                                        "w-lane-4":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}}
-                        # check for polygons
-                        for poly in data['polygons']:
-                            print(data['polygons'])
-                            if poly in polygon_dictionary_ped[cam]:
-                                print("starting polygon update")
-                                # increment count for polygons
-                                if classType=="bicycle":
-                                    polygon_dictionary_ped[cam][poly]["bike-count"] += 1
-                                elif classType=="Person":
-                                    polygon_dictionary_ped[cam][poly]["ped-count"] += 1
-                                #polygon_dictionary_ped[cam][poly]["count"] += 1
-                                # check if waiting time is in data
-                                if 'waiting_time' in data and poly in data['waiting_time']:
-                                    polygon_dictionary_ped[cam][poly]["ped-wait-time"] += data['waiting_time'][poly]
-                                # check if crossing time is in data
-                                if 'crossing_time' in data and poly in data['crossing_time']:
-                                    polygon_dictionary_ped[cam][poly]["ped-cross-time"] += data['crossing_time'][poly]
-                                # check violation and increment count for bike and pedestrian lane violations
-                                if classType=="bicycle" and data['violation'] == True and poly in data['violation_details']['pedestrian_lane']:
-                                    polygon_dictionary_ped[cam][poly]["bike-violation-count"] += 1
-                                    #print("violation detected for camera", cam, "object id", data['object_id'], "class", classType, "polygons", data['polygons'])
-                                    #print(data['violation_details']['pedestrian_lane'])
-                                elif classType=="Person" and data['violation'] == True and poly in data['violation_details']:
-                                    polygon_dictionary_ped[cam][poly]["ped-violation-count"] += 1
-                                # increment maximum waiting time
-                                if 'waiting_time' in data and poly in data['waiting_time']:
-                                    if data['waiting_time'][poly] > polygon_dictionary_ped[cam][poly]["ped-wait-time-max"]:
-                                        polygon_dictionary_ped[cam][poly]["ped-wait-time-max"] = data['waiting_time'][poly]
-                                # increment maximum crossing time
-                                if 'crossing_time' in data and poly in data['crossing_time']:
-                                    if data['crossing_time'][poly] > polygon_dictionary_ped[cam][poly]["ped-cross-time-max"]:
-                                        polygon_dictionary_ped[cam][poly]["ped-cross-time-max"] = data['crossing_time'][poly]
-                                print(polygon_dictionary_ped[cam])
+    # Pedestrians: per camera, per polygon with ped-count > 0.
+    for cam, polys in state.polygon_dictionary_ped.items():
+        flag = "true" if str(cam) in bikepedonly else "false"
+        for poly, pv in polys.items():
+            if pv["ped-count"] <= 0:
+                continue
+            _send(producer, {
+                "id": cam, "class": "ped", "polygon": poly,
+                "ped_count": pv["ped-count"], "bike_count": "",
+                "ped_wait_time": pv["ped-wait-time"], "ped_cross_time": pv["ped-cross-time"],
+                "ped_violation_count": pv["ped-violation-count"],
+                "bike_violation_count": pv["bike-violation-count"],
+                "ped_wait_time_max": pv["ped-wait-time-max"],
+                "ped_cross_time_max": pv["ped-cross-time-max"],
+                "time": stamp, "rddir": "",
+                "start_direction": "", "end_direction": "", "count": "",
+                "start_road_name": "", "end_road_name": "",
+                "bikepedonly": flag,
+            })
 
-                    elif classType == "bicycle":
-                        #print("person or bike found")
-                        # if the class is person or bike, add to polygon dictionary
-                        if cam not in polygon_dictionary_bike:
-                            polygon_dictionary_bike[cam] = {"n-crosswalk":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0},
-                                                        "s-crosswalk":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0},
-                                                        "e-crosswalk":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0},
-                                                        "w-crosswalk":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0},
-                                                        "w-sidewalk-n":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0},
-                                                        "w-sidewalk-s":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}, 
-                                                        "s-sidewalk-w":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}, 
-                                                        "s-sidewalk-e":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}, 
-                                                        "e-sidewalk-s":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}, 
-                                                        "e-sidewalk-n":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}, 
-                                                        "n-sidewalk-e":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}, 
-                                                        "n-sidewalk-w":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}, 
-                                                        "w-bikelane-wb":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}, 
-                                                        "w-bikelane-eb":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}, 
-                                                        "s-bikelane-sb":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}, 
-                                                        "s-bikelane-nb":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}, 
-                                                        "e-bikelane-eb":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}, 
-                                                        "e-bikelane-wb":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}, 
-                                                        "n-bikelane-nb":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}, 
-                                                        "n-bikelane-sb":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}, 
-                                                        "n-lane-1":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}, 
-                                                        "n-lane-2":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}, 
-                                                        "n-lane-3":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}, 
-                                                        "n-lane-4":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}, 
-                                                        "s-lane-1":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}, 
-                                                        "s-lane-2":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}, 
-                                                        "s-lane-3":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}, 
-                                                        "s-lane-4":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}, 
-                                                        "e-lane-1":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}, 
-                                                        "e-lane-2":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}, 
-                                                        "e-lane-3":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}, 
-                                                        "e-lane-4":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}, 
-                                                        "w-lane-1":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}, 
-                                                        "w-lane-2":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}, 
-                                                        "w-lane-3":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}, 
-                                                        "w-lane-4":{"ped-count":0,"bike-count":0, "ped-wait-time":0,"ped-cross-time":0, "ped-violation-count":0, "bike-violation-count":0, "ped-wait-time-max":0, "ped-cross-time-max":0}}
-                        # check for polygons
-                        for poly in data['polygons']:
-                            print(data['polygons'])
-                            if poly in polygon_dictionary_bike[cam]:
-                                #print("starting polygon update")
-                                # increment count for polygons
-                                polygon_dictionary_bike[cam][poly]["bike-count"] += 1
-                                # check if waiting time is in data
-                                if 'waiting_time' in data and poly in data['waiting_time']:
-                                    polygon_dictionary_bike[cam][poly]["ped-wait-time"] += data['waiting_time'][poly]
-                                # check if crossing time is in data
-                                if 'crossing_time' in data and poly in data['crossing_time']:
-                                    polygon_dictionary_bike[cam][poly]["ped-cross-time"] += data['crossing_time'][poly]
-                                # check violation and increment count for bike and pedestrian lane violations
-                                if classType=="bicycle" and data['violation'] == True and poly in data['violation_details']['pedestrian_lane']:
-                                    polygon_dictionary_bike[cam][poly]["bike-violation-count"] += 1
-                                    #print("violation detected for camera", cam, "object id", data['object_id'], "class", classType, "polygons", data['polygons'])
-                                    #print(data['violation_details']['pedestrian_lane'])
-                                # increment maximum waiting time
-                                if 'waiting_time' in data and poly in data['waiting_time']:
-                                    if data['waiting_time'][poly] > polygon_dictionary_bike[cam][poly]["ped-wait-time-max"]:
-                                        polygon_dictionary_bike[cam][poly]["ped-wait-time-max"] = data['waiting_time'][poly]
-                                # increment maximum crossing time
-                                if 'crossing_time' in data and poly in data['crossing_time']:
-                                    if data['crossing_time'][poly] > polygon_dictionary_bike[cam][poly]["ped-cross-time-max"]:
-                                        polygon_dictionary_bike[cam][poly]["ped-cross-time-max"] = data['crossing_time'][poly]
-                                print(polygon_dictionary_bike[cam])
-                    # remove trucks and bus, just keep cars for now. 2027-07-31
-                    #elif classType == "car" or classType == "bus" or classType == "truck":
-                    elif classType == "car":
-                        #print("car, bus or truck found")
-                        # check all directions
-                        for direc in directions:
-                            #print(cam, "direction", direc, str(data['start_direction']+data['end_direction']))
-                            # if directions match. str() to handle null values.
-                            if str(data['start_direction']) + str(data['end_direction']) == direc:
-                                #print('match found')
-                                # add start/end road to road dictionary with key as 3029-NS:{start_road_name:, end_road_name:}
-                                if str(cam)+"-"+(direc) not in road_dictionary:
-                                    road_dictionary[str(cam)+"-"+(direc)] = {"start_road_name":data['start_direction'], "end_road_name":data['end_direction']}
-                                # access dictionary and increment direction value
-                                #print(camera_dictionary[cam])
-                                #print(camera_dictionary[cam][direc])
-                                camera_dictionary[cam][direc] += 1
+    # Bikes: per camera, per polygon with bike-count > 0.
+    for cam, polys in state.polygon_dictionary_bike.items():
+        flag = "true" if str(cam) in bikepedonly else "false"
+        for poly, pv in polys.items():
+            if pv["bike-count"] <= 0:
+                continue
+            _send(producer, {
+                "id": cam, "class": "bike", "polygon": poly,
+                "ped_count": "", "bike_count": pv["bike-count"],
+                "ped_wait_time": pv["ped-wait-time"], "ped_cross_time": pv["ped-cross-time"],
+                "ped_violation_count": pv["ped-violation-count"],
+                "bike_violation_count": pv["bike-violation-count"],
+                "ped_wait_time_max": pv["ped-wait-time-max"],
+                "ped_cross_time_max": pv["ped-cross-time-max"],
+                "time": stamp, "rddir": "",
+                "start_direction": "", "end_direction": "", "count": "",
+                "start_road_name": "", "end_road_name": "",
+                "bikepedonly": flag,
+            })
 
-            final_op.append(data)
-            #print(len(final_op))
+    print("number of messages:", state.message_count)
 
 
-    ##### put logic here to push to producer
-    #print(camera_dictionary)
-    #json_list = []
-    # for each camera
-    for key, value in camera_dictionary.items():
-        # for each camera that is not bike/ped only
-        if str(key) not in bikepedonly:
-            print(str(key), ":", value)
-            # for each camera direction
-            for direc2, direc2_value in value.items():
-                if direc2_value > 0:
-                    # add road names
-                    for key_cam_direc, value_srname_ername in road_dictionary.items():
-                        if str(key)+"-"+str(direc2) == key_cam_direc:
-                    #val_to_append = key, direc2, direc2_value, datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                            #val_to_append = {"id":key, "rddir":direc2, "start_direction":str(direc2)[0], "end_direction":str(direc2)[1], "count":direc2_value, "start_road_name":value_srname_ername["start_road_name"], "end_road_name":value_srname_ername["end_road_name"], "time":datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
-                            val_to_append = {"id":key,
-                                                "class":"vehicle",
-                                                "polygon":"", 
-                                                "ped_count":"", 
-                                                "bike_count":"", 
-                                                "ped_wait_time":"", 
-                                                "ped_cross_time":"", 
-                                                "ped_violation_count":"", 
-                                                "bike_violation_count":"", 
-                                                "ped_wait_time_max":"", 
-                                                "ped_cross_time_max":"",
-                                                "time":datetime.now().astimezone(est).strftime("%Y-%m-%d %H:%M:%S"),
-                                                "rddir":direc2,
-                                                "start_direction":str(direc2)[0], 
-                                                "end_direction":str(direc2)[1],
-                                                "count":direc2_value,
-                                                "start_road_name":value_srname_ername["start_road_name"], 
-                                                "end_road_name":value_srname_ername["end_road_name"],
-                                                "bikepedonly":"false"}
-                    #json_list.append(val_to_append)
-                            #print(json.dumps(val_to_append))
-                            message_value = str(json.dumps(val_to_append)).encode('utf-8')
-                            print("sending to topic", topic, "value", message_value)
-                            # sending to producer
-                            producer.send(topic, value=message_value)
-                                #print(json_list)
-    print("number of messages:", len(final_op))
+# ---------------------------------------------------------------------------
+# Main consume loop
+# ---------------------------------------------------------------------------
+def main():
+    producer = KafkaProducer(bootstrap_servers=BOOTSTRAP_SERVERS)
+    # Manual commit: offsets advance only after a window's messages are counted and the
+    # results are flushed, so a rebalance/restart cannot replay an already-counted window.
+    consumer = KafkaConsumer(IN_TOPIC,
+                             bootstrap_servers=BOOTSTRAP_SERVERS,
+                             group_id='directioncount-consumer',
+                             enable_auto_commit=False,
+                             auto_offset_reset='latest')
+
+    state = WindowState()
+    window_end = datetime.now() + timedelta(seconds=WINDOW_SECONDS)
+    print("window start", datetime.now(), "-> end", window_end)
+
+    try:
+        while True:
+            now = datetime.now()
+            if now >= window_end:
+                emit_window(state, producer)
+                producer.flush()
+                consumer.commit()          # durably advance past this window's messages
+                state = WindowState()
+                # Advance the boundary, catching up if a slow window overran several boundaries.
+                while window_end <= now:
+                    window_end += timedelta(seconds=WINDOW_SECONDS)
+                print("window start", now, "-> end", window_end)
+                continue
+
+            records = consumer.poll(timeout_ms=POLL_TIMEOUT_MS)
+            for _tp, messages in records.items():
+                for message in messages:
+                    key = (message.partition, message.offset)
+                    if key in state.seen_offsets:
+                        continue          # guard against redelivery within this window
+                    state.seen_offsets.add(key)
+                    try:
+                        data = json.loads(message.value.decode('utf-8'))
+                    except (ValueError, UnicodeDecodeError) as e:
+                        print("skipping undecodable message:", e)
+                        continue
+                    try:
+                        process_message(data, state)
+                        state.message_count += 1
+                    except (KeyError, TypeError) as e:
+                        print("skipping malformed message:", e)
+                        continue
+    finally:
+        # Do not emit the in-progress (partial) window on shutdown -- it would be an
+        # incomplete count. Just release resources cleanly.
+        consumer.close()
+        producer.flush()
+        producer.close()
+        print("end script")
 
 
-    for key, value in polygon_dictionary_ped.items():
-        for poly, poly_value in value.items():
-            if poly_value["ped-count"] > 0:
-                #print("polygon", poly, "ped-count", poly_value["ped-count"], "bike-count", poly_value["bike-count"])
-                #val_to_append = {"id":key, "polygon":poly, "ped_count":poly_value["ped-count"], "bike_count":poly_value["bike-count"], "ped_wait_time":poly_value["ped-wait-time"], "ped_cross_time":poly_value["ped-cross-time"], "ped_violation_count":poly_value["ped-violation-count"], "bike_violation_count":poly_value["bike-violation-count"], "ped_wait_time_max":poly_value["ped-wait-time-max"], "ped_cross_time_max":poly_value["ped-cross-time-max"], "time":datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
-                if str(key) in bikepedonly:
-                    val_to_append = {"id":key, 
-                                    "class":"ped", 
-                                    "polygon":poly, 
-                                    "ped_count":poly_value["ped-count"], 
-                                    "bike_count":"", 
-                                    "ped_wait_time":poly_value["ped-wait-time"], 
-                                    "ped_cross_time":poly_value["ped-cross-time"], 
-                                    "ped_violation_count":poly_value["ped-violation-count"], 
-                                    "bike_violation_count":poly_value["bike-violation-count"], 
-                                    "ped_wait_time_max":poly_value["ped-wait-time-max"], 
-                                    "ped_cross_time_max":poly_value["ped-cross-time-max"], 
-                                    "time":datetime.now().astimezone(est).strftime("%Y-%m-%d %H:%M:%S"),
-                                    "rddir":"",
-                                    "start_direction":"", 
-                                    "end_direction":"",
-                                    "count":"",
-                                    "start_road_name":"", 
-                                    "end_road_name":"",
-                                    "bikepedonly":"true"}
-                else:
-                    val_to_append = {"id":key, 
-                                    "class":"ped", 
-                                    "polygon":poly, 
-                                    "ped_count":poly_value["ped-count"], 
-                                    "bike_count":"", 
-                                    "ped_wait_time":poly_value["ped-wait-time"], 
-                                    "ped_cross_time":poly_value["ped-cross-time"], 
-                                    "ped_violation_count":poly_value["ped-violation-count"], 
-                                    "bike_violation_count":poly_value["bike-violation-count"], 
-                                    "ped_wait_time_max":poly_value["ped-wait-time-max"], 
-                                    "ped_cross_time_max":poly_value["ped-cross-time-max"], 
-                                    "time":datetime.now().astimezone(est).strftime("%Y-%m-%d %H:%M:%S"),
-                                    "rddir":"",
-                                    "start_direction":"", 
-                                    "end_direction":"",
-                                    "count":"",
-                                    "start_road_name":"", 
-                                    "end_road_name":"",
-                                    "bikepedonly":"false"}
-                #print(json.dumps(val_to_append))
-                message_value = str(json.dumps(val_to_append)).encode('utf-8')
-                print("sending to topic", topic, "value", message_value)
-                producer.send(topic, value=message_value)
-
-    for key, value in polygon_dictionary_bike.items():
-        for poly, poly_value in value.items():
-            if poly_value["bike-count"] > 0:
-                if str(key) in bikepedonly:
-                    val_to_append = {"id":key, 
-                                    "class":"bike", 
-                                    "polygon":poly, 
-                                    "ped_count":"", 
-                                    "bike_count":poly_value["bike-count"], 
-                                    "ped_wait_time":poly_value["ped-wait-time"], 
-                                    "ped_cross_time":poly_value["ped-cross-time"], 
-                                    "ped_violation_count":poly_value["ped-violation-count"], 
-                                    "bike_violation_count":poly_value["bike-violation-count"], 
-                                    "ped_wait_time_max":poly_value["ped-wait-time-max"], 
-                                    "ped_cross_time_max":poly_value["ped-cross-time-max"], 
-                                    "time":datetime.now().astimezone(est).strftime("%Y-%m-%d %H:%M:%S"),
-                                    "rddir":"",
-                                    "start_direction":"", 
-                                    "end_direction":"",
-                                    "count":"",
-                                    "start_road_name":"", 
-                                    "end_road_name":"",
-                                    "bikepedonly":"true"}
-                else:
-                     val_to_append = {"id":key, 
-                                    "class":"bike", 
-                                    "polygon":poly, 
-                                    "ped_count":"", 
-                                    "bike_count":poly_value["bike-count"], 
-                                    "ped_wait_time":poly_value["ped-wait-time"], 
-                                    "ped_cross_time":poly_value["ped-cross-time"], 
-                                    "ped_violation_count":poly_value["ped-violation-count"], 
-                                    "bike_violation_count":poly_value["bike-violation-count"], 
-                                    "ped_wait_time_max":poly_value["ped-wait-time-max"], 
-                                    "ped_cross_time_max":poly_value["ped-cross-time-max"], 
-                                    "time":datetime.now().astimezone(est).strftime("%Y-%m-%d %H:%M:%S"),
-                                    "rddir":"",
-                                    "start_direction":"", 
-                                    "end_direction":"",
-                                    "count":"",
-                                    "start_road_name":"", 
-                                    "end_road_name":"",
-                                    "bikepedonly":"false"}
-                #print(json.dumps(val_to_append))
-                message_value = str(json.dumps(val_to_append)).encode('utf-8')
-                print("sending to topic", topic, "value", message_value)
-                producer.send(topic, value=message_value)
-
-
-
-    #encode for kafka
-    #message_value = str(final_op).encode('utf-8')
-    # producer.send currently fails due to data in wrong format, needs JSON as output?
-    #producer.send(topic, value=message_value)
-    ##### end producer logic
-
-# probably not necessary to close consumer here but just in case
-consumer.close()
-producer.close()
-
-print("end script")
+if __name__ == "__main__":
+    main()
